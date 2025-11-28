@@ -1,0 +1,29 @@
+[project]
+name = "ticketless_parking_system"
+version = "0.1.0"
+description = "Short description of your project"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "opencv-python",
+    "zmq"
+]
+
+authors = [
+    { name = "Dominik Schweigl", email = "domnik.dev@gmail.com" },
+    { name = "Nikola Adzic" },
+    { name = "Daniel Wenger" }
+]
+
+# Optional: entry points (CLI scripts)
+# [project.scripts]
+# yourcli = "your_package.module:main"
+
+
+# Dev dependencies (requires uv, poetry, or pip-tools)
+[project.optional-dependencies]
+dev = [
+    "uv",
+    "black"
+]
