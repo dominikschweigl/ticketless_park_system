@@ -1,0 +1,43 @@
+services:
+  nats:
+    image: nats:2.10
+    container_name: nats
+    restart: always
+    ports:
+      - "4222:4222"
+      - "8222:8222" # monitoring UI
+    environment:
+      - JS_DISABLE=true
+    command: ["-js"]   # enable JetStream if you want it
+    networks:
+      - parking-net
+
+  camera:
+    build:
+      context: ./src/ticketless_parking_system/IoT/camera
+    container_name: camera-simulator
+    restart: always
+    environment:
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      - nats
+    networks:
+      - parking-net
+    volumes:
+      - ./data:/app/data  # mount your image dataset
+
+  edge-server:
+    build:
+      context: ./src/ticketless_parking_system/edge
+    container_name: edge-server
+    restart: always
+    environment:
+      - NATS_URL=nats://nats:4222
+    depends_on:
+      - nats
+    networks:
+      - parking-net
+
+networks:
+  parking-net:
+    driver: bridge
