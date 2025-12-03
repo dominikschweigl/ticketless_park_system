@@ -63,7 +63,7 @@ Regarding our Service choices, the Akka Framework is used in the Cloud Layer as 
 For the edge servers we will use Python to implement the license plate detection as Python is the de facto standard for machine learning related tasks. This means that controls of the gates and traffic lights will also be done via python. 
 
 \subsection{IoT Implementation}
-The camera is simulated by continuously sending images from the license plate detection dataset and a reference empty street scene to the edge server using a NATS message queue. It is made sure that the data sent by the entry and exit cameras is consistent. This means that the exit camera will only show cars leaving that have previously left. The duration of the cars inside the car parks is sampled randomly.
+The camera is simulated by continuously sending images from the license plate detection dataset and a reference empty street scene to the edge server using a NATS message queue. It is made sure that the data sent by the entry and exit cameras is consistent. This means that the exit camera will only show cars leaving that have previously entered. The duration of the cars inside the car parks is sampled randomly.
 
 We plan to simulate the gates and traffic lights with a python program that visualizes their state with a library like Tkinter or similar a library.
 
