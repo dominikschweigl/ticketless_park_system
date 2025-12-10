@@ -13,14 +13,20 @@ async def main():
     async def entry_handler(msg):
         jpg = np.frombuffer(msg.data, np.uint8)
         img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
-        cv2.imshow("Entry Camera", img)
+        
+        print("Received entry image.")
+        # View disabled for now since docker container does not support GUI
+        # cv2.imshow("Entry Camera", img)
         
     await nc.subscribe("camera.entry", cb=entry_handler)
 
     async def exit_handler(msg):
         jpg = np.frombuffer(msg.data, np.uint8)
         img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
-        cv2.imshow("Exit Camera", img)
+
+        print("Received exit image.")
+        # View disabled for now since docker container does not support GUI
+        # cv2.imshow("Exit Camera", img)
         
     await nc.subscribe("camera.exit", cb=exit_handler)
 

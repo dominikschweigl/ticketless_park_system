@@ -1,0 +1,78 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+
+\title{Video License Plate Parking System}
+
+\author{\IEEEauthorblockN{Dominik Schweigl}
+\and
+\IEEEauthorblockN{Daniel Wenger}
+\and
+\IEEEauthorblockN{Nikola Adzic}
+}
+
+\maketitle
+
+\section{Introduction}
+This project implements a distributed parking system that captures the license plate of incoming and leaving vehicles at the gates of a car park. These detections are used to be able to pay only with one's license plate number at the payment station. With this system it is possible to allow customers to pay without tickets. Instead, customers pay from their smartphones in the web or at payment stations using their license plate number. In addition, the web app allows customers to view car parks with open spaces and book a parking spot in advance.
+
+The dataset we will use is the Car License Plate Detection dataset from Kaggle. It features more than 400 images of car front/ rear views with clearly visible license plates. For a real system one would fine tune a corresponding detection model on the specific surroundings and camera angle of the actual entries to the parking space. We will use a precrafted YOLOv11 license plate detection model  for this project.
+
+\section{System architecture}
+
+Regarding the components and functionality of this project, we will have 2 cameras 
+pointing to the entry and exit respectively at each car park. There will be 2 gates 
+for the entry and exit to the parking space controlled by an edge server. The edge 
+server will process the video stream of the cameras and run the license plate 
+detection algorithm. Once a license plate has been detected for a predefined amount 
+of time in front of the entry, the entry gate will open, and the car will be 
+registered in a local data store to guarantee data persistence. When the edge server 
+detects a vehicle that has already paid at the exit, which is queried from the cloud, 
+the gate will open, and a green signal will appear 
+on the traffic light. If the car has not paid or the amount of time to leave 
+the parking space after payment has expired, the gate will not open, and a red 
+signal will indicate the car to return and pay. Customers can pay their parking fee
+using the web application or the local payment station using their license plate. 
+A diagram of these components can be seen in Figure~\ref{fig:architecture_diagram}.
+
+The cloud will receive updates from the edge servers on their current open capacity.
+This information allows to compute the nearest free parking spots for any destination
+a customer has. The customer can also book a parking spot in advance for a given
+car park, which sends an event to the corresponding edge server to reserve a spot
+for the car with the customers license plate.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=1\linewidth]{architecture_diagram.png}
+    \caption{The architecture diagram for this project. For visual purposes only a single car park system is illustrated.}
+    \label{fig:architecture_diagram}
+\end{figure}
+
+\section{Implementation details}
+Regarding our Service choices, the Akka Framework is used in the Cloud Layer as it is mandatory for this assignment. Actors will store their state in a DynamoDB table because we want to ensure reliability even if some server with Akka Actors crashes. The communication from the cloud to the edge server is done through a message queue to make the edge server location transparent for the cloud. The edge server computes the detection algorithm on the video stream and manages the local IoT devices as well as parking data to keep network traffic to the cloud low. This way we only send small messages of detection events with current open capacity to the cloud. Communication from the edge to the cloud Akka Backend does not go through the message queue and instead uses Akka's HTTP REST API. This is because some of the calls to the cloud for information retrieval like a GET request for car payment status fit better as synchronous calls rather than asynchronous messages. Therefore, to have a uniform access point for the edge we will use the REST API also for capacity update events. Though we leave the possibility open to also use the message queue for communication from the edge to the cloud backend.
+
+For the edge servers we will use Python to implement the license plate detection as Python is the de facto standard for machine learning related tasks. This means that controls of the gates and traffic lights will also be done via python. 
+
+\subsection{IoT Implementation}
+The camera is simulated by continuously sending images from the license plate detection dataset and a reference empty street scene to the edge server using a NATS message queue. It is made sure that the data sent by the entry and exit cameras is consistent. This means that the exit camera will only show cars leaving that have previously entered. The duration of the cars inside the car parks is sampled randomly.
+
+We plan to simulate the gates and traffic lights with a python program that visualizes their state with a library like Tkinter or similar a library.
+
+For the payment station and web UI we plan to have a simple UI where one can view current car parks with free capacity near one's destination as well as book or pay using one's license plate number without any real payment.
+
+\section{Evaluation}
+Stress your application to prove the correctness of your implementation, be aware of its main limitations. Explain first the experiments done (e.g., vary the number of input events), then introduce and discuss the results obtained.
+
+\section{Conclusions and future work}
+Summarize your solution described in this report, as well as honestly mention the current limitations and the areas that could be explored in future work.  
+
+\end{document}
