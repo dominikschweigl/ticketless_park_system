@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y \
 # Copy project files
 COPY . /app
 
+ENV CAMERA_ID=0
+
 # Install Python dependencies
 RUN pip install -r requirements.txt
 

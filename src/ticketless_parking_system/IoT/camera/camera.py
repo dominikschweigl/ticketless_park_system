@@ -8,12 +8,16 @@ from nats.aio.client import Client as NATS
 DISPLAY_TIME = 5.0
 FRAME_DELAY = 1.0
 NATS_URL = os.environ.get("NATS_URL")
+CAMERA_ID = os.environ.get("CAMERA_ID", "0")
 
 
 # ---------------------------------------------------------
 # ENTRY CAMERA STREAM
 # ---------------------------------------------------------
 async def simulate_entry_stream(car_paths, nats_client, empty_path, entered_queue: asyncio.Queue):
+
+    headers = {"camera_id": f"entry_{CAMERA_ID}"}
+
     empty_frame = cv2.imread(empty_path)
     if empty_frame is None:
         raise ValueError("Missing Empty.png")
@@ -36,7 +40,7 @@ async def simulate_entry_stream(car_paths, nats_client, empty_path, entered_queu
         start = asyncio.get_running_loop().time()
         while asyncio.get_running_loop().time() - start < DISPLAY_TIME:
             _, buf = cv2.imencode(".jpg", frame)
-            await nats_client.publish("camera.entry", buf.tobytes())
+            await nats_client.publish("camera.entry", buf.tobytes(), headers=headers)
             await asyncio.sleep(FRAME_DELAY)
 
         # --- Show empty street for DISPLAY_TIME ---
@@ -45,7 +49,7 @@ async def simulate_entry_stream(car_paths, nats_client, empty_path, entered_queu
         start = asyncio.get_running_loop().time()
         while asyncio.get_running_loop().time() - start < DISPLAY_TIME:
             _, buf = cv2.imencode(".jpg", empty_frame)
-            await nats_client.publish("camera.entry", buf.tobytes())
+            await nats_client.publish("camera.entry", buf.tobytes(), headers=headers)
             await asyncio.sleep(FRAME_DELAY)
 
         car_index = (car_index + 1) % len(car_paths)
@@ -55,6 +59,9 @@ async def simulate_entry_stream(car_paths, nats_client, empty_path, entered_queu
 # EXIT CAMERA STREAM
 # ---------------------------------------------------------
 async def simulate_exit_stream(nats_client, empty_path, entered_queue: asyncio.Queue):
+
+    headers = {"camera_id": f"exit_{CAMERA_ID}"}
+
     empty_frame = cv2.imread(empty_path)
     if empty_frame is None:
         raise ValueError("Missing Empty.png")
@@ -68,7 +75,7 @@ async def simulate_exit_stream(nats_client, empty_path, entered_queue: asyncio.Q
         if entered_queue.empty() or np.random.random() > exit_probability:
             _, buf = cv2.imencode(".jpg", empty_frame)
 
-            await nats_client.publish("camera.exit", buf.tobytes())
+            await nats_client.publish("camera.exit", buf.tobytes(), headers=headers)
             await asyncio.sleep(FRAME_DELAY)
 
         else:
@@ -81,7 +88,7 @@ async def simulate_exit_stream(nats_client, empty_path, entered_queue: asyncio.Q
             while asyncio.get_running_loop().time() - start < DISPLAY_TIME:
                 _, buf = cv2.imencode(".jpg", frame)
 
-                await nats_client.publish("camera.exit", buf.tobytes())
+                await nats_client.publish("camera.exit", buf.tobytes(), headers=headers)
                 await asyncio.sleep(FRAME_DELAY)
             
 
