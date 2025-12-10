@@ -6,9 +6,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 
 dependencies = [
-    "opencv-python",
+    "opencv-contrib-python",
     "numpy",
-    "nats-py"
+    "nats-py",
+    "ultralytics",
+    "easyocr"
 ]
 
 authors = [

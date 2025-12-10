@@ -234,3 +234,6 @@ __marimo__/
 latexmkrc
 
 data
+
+# Detection Models
+*.pt

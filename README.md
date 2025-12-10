@@ -95,6 +95,11 @@ This project uses Docker and Docker Compose to orchestrate multiple services: th
 - **Dependencies**: Requires NATS service to be running
 - **Network**: parking-net (bridge network)
 
+Can also be run locally with the following command and assuming that the nast and camera containers are running. 
+
+```
+NATS_URL=nats://localhost:4222 DETECTION_MODEL_PATH="./src/ticketless_parking_system/edge/yolov11s-license-plate.pt" uv run src/ticketless_parking_system/edge/server.py
+```
 
 ### Getting Started with Docker
 
