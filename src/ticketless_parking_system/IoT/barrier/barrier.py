@@ -157,7 +157,7 @@ async def main(ui):
 def start_loop(ui):
     asyncio.run(main(ui))
 if __name__ == "__main__":
-    ui = BarrierUI()
-    t = threading.Thread(target=start_loop, args=(ui,))
+    #ui = BarrierUI() -- deactivate for docker --
+    t = threading.Thread(target=start_loop, args=(None,)) # deactivate for docker --
     t.start()
-    ui.root.mainloop()
+    #ui.root.mainloop()

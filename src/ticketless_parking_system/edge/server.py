@@ -9,6 +9,36 @@ import easyocr
 NATS_URL = os.environ.get("NATS_URL")
 DETECTION_MODEL_PATH = os.environ.get("DETECTION_MODEL_PATH")
 
+async def open_barrier(nc: NATS, barrier_id: str):
+    try: 
+        reply = await nc.request(
+           f"{barrier_id}.trigger",
+           b"",
+           timeout=30 
+        )
+
+        if reply.data == b"done":
+            print("Barrier opened successfully.")
+        else:
+            print("Barrier failure: ", reply.data.decode())
+
+    except asyncio.TimeoutError:
+        print("Timeout: Communication with barrier failed.")
+
+
+async def checkpoint_handler(plate_text: str, id_: str, nc: NATS):
+    if  id_.split("_")[0] == "entry":
+        # register vehicle 
+        await open_barrier(nc, id_)
+    if id_.split("_")[0] == "exit":
+        payed = True  # placeholder for payment check
+        if payed:
+            print(f"Vehicle {plate_text} has paid. Opening exit barrier.")
+            await open_barrier(nc, id_)
+        else:
+            print(f"Vehicle {plate_text} has not paid. Denying exit.")
+
+
 def show_image(window_name, img):
     cv2.imshow(window_name, img)
     cv2.waitKey(1)
@@ -21,10 +51,11 @@ async def main():
     reader = easyocr.Reader(["en"], gpu=False)
 
     async def entry_handler(msg):
+        id_ = msg.header.get("camera_id", "unknown")
         jpg = np.frombuffer(msg.data, np.uint8)
         img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
         
-        print("Received entry image.")
+        print(f"Received entry image from {id_}.")
         # View disabled for now since docker container does not support GUI
         # show_image("Entry Camera", img)
 
@@ -56,19 +87,20 @@ async def main():
         if len(ocr_results) > 0:
             # each result = [bbox, text, confidence]
             plate_text = ocr_results[0][1]
+            await checkpoint_handler(plate_text, id_, nc)
         else:
             plate_text = "OCR failed to detect text"
-
         print(f"Detected Plate Box: {x1,y1,x2,y2} (YOLO conf={conf:.2f})")
         print(f"OCR Result: {plate_text}")
         
     await nc.subscribe("camera.entry", cb=entry_handler)
 
     async def exit_handler(msg):
+        id_ = msg.headers.get("camera_id", "unknown")
         jpg = np.frombuffer(msg.data, np.uint8)
         img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
 
-        print("Received exit image.")
+        print(f"Received exit image from {id_}.")
         # View disabled for now since docker container does not support GUI
         # cv2.imshow("Exit Camera", img)
         
