@@ -60,34 +60,51 @@ for the car with the customers license plate.
 \section{Implementation details}
 Regarding our Service choices, the Akka Framework is used in the Cloud Layer as it is mandatory for this assignment. Actors will store their state in a DynamoDB table because we want to ensure reliability even if some server with Akka Actors crashes. The communication from the cloud to the edge server is done through a message queue to make the edge server location transparent for the cloud. The edge server computes the detection algorithm on the video stream and manages the local IoT devices as well as parking data to keep network traffic to the cloud low. This way we only send small messages of detection events with current open capacity to the cloud. Communication from the edge to the cloud Akka Backend does not go through the message queue and instead uses Akka's HTTP REST API. This is because some of the calls to the cloud for information retrieval like a GET request for car payment status fit better as synchronous calls rather than asynchronous messages. Therefore, to have a uniform access point for the edge we will use the REST API also for capacity update events. Though we leave the possibility open to also use the message queue for communication from the edge to the cloud backend.
 
-\subsection{Edge Implementation}
-For the edge servers we use Python to implement the license plate 
-detection as Python is the de facto standard for machine learning 
-related tasks. As the control logic is relatively simple, the 
-communication with the IoT devices is also implemented via Python
-to avoid the complexity overhead of other languages and frameworks.
-
-The edge server uses the NATS message queue to receive images from 
-the entry and exit cameras. The images are processed using a YOLOv11 
-license plate detection model to find the license plate in the image. 
-After cropping the license plate from the image, an OCR algorithm 
-is used to extract the license plate text. For this currently the
-generic EasyOCR is used but we might use PaddleOCR with a model 
-specialized for license plates in the future. 
-
-The extracted license plate text, a uuid, and a timestamp will then be sent to 
-the cloud Akka backend via REST API to allow online payment. 
-When a car approaches the exit, the payment status of the corresponding
-license plate is retrieved from the cloud using the locally stored uuid.
-Based on the response from the cloud, the edge server 
-controls the gates and traffic lights accordingly.
+For the edge servers we will use Python to implement the license plate detection as Python is the de facto standard for machine learning related tasks. This means that controls of the gates and traffic lights will also be done via python. 
 
 \subsection{IoT Implementation}
 The camera is simulated by continuously sending images from the license plate detection dataset and a reference empty street scene to the edge server using a NATS message queue. It is made sure that the data sent by the entry and exit cameras is consistent. This means that the exit camera will only show cars leaving that have previously entered. The duration of the cars inside the car parks is sampled randomly.
 
 We plan to simulate the gates and traffic lights with a python program that visualizes their state with a library like Tkinter or similar a library.
 
-For the payment station and web UI we plan to have a simple UI where one can view current car parks with free capacity near one's destination as well as book or pay using one's license plate number without any real payment.
+For the web interface, we implemented a web application
+using React. This allows us to simulate a real-world scenario
+where customers use their smartphones or a kiosk to inter-
+act with the system. The user interface was designed with
+Tailwind CSS to ensure it is easy to use and responsive on
+different screen sizes. Through this web app, users can check
+for available parking spots in real-time, reserve a space in
+advance, and pay their parking fees by simply entering their
+license plate number, which triggers the necessary validation
+checks in our backend.
+
+\subsection{Edge Implementation}
+
+The edge server performs all real-time processing required at the car park
+gates. Images from the simulated entry and exit cameras are published via NATS,
+and the edge server subscribes to these streams. For each received frame, the
+server runs a YOLOv11-based license plate detector followed by OCR to extract
+the plate text. The resulting detection is then processed locally without
+requiring immediate cloud interaction.
+
+To maintain local state, the edge server uses a lightweight SQLite database.
+When a vehicle appears at the entry, the edge checks whether an active session
+for the same plate already exists and only creates a new record if the vehicle
+is not already inside. This prevents duplicated entries caused by multiple
+detections of the same car while it remains in front of the camera. For exit
+events, the edge looks up the corresponding session and completes it by adding
+an exit timestamp. In a full deployment this step would also include a payment
+verification request to the cloud; in the current implementation this behaviour
+is simulated.
+
+After updating the database, the edge server publishes a control message via
+NATS to trigger the barrier device. This creates a complete workflow in which
+camera images flow through NATS to the edge, are processed and stored locally,
+and finally result in barrier actuation through NATS again. By keeping this
+logic at the edge, the system remains responsive even under cloud latency or
+temporary disconnection, while the cloud only needs to receive high-level
+events such as occupancy updates or payment checks.
+
 
 \section{Evaluation}
 Stress your application to prove the correctness of your implementation, be aware of its main limitations. Explain first the experiments done (e.g., vary the number of input events), then introduce and discuss the results obtained.

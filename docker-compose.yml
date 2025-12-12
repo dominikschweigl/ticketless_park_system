@@ -33,11 +33,18 @@ services:
     restart: always
     environment:
       - NATS_URL=nats://nats:4222
+      - DB_PATH=/app/data/parking.db
     depends_on:
       - nats
     networks:
       - parking-net
+    volumes:
+      # persistent storage for SQLite DB file
+      - edge-db-data:/app/data
 
 networks:
   parking-net:
     driver: bridge
+
+volumes:
+  edge-db-data:

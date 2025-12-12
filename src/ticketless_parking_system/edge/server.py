@@ -2,42 +2,185 @@ import os
 import cv2
 import numpy as np
 import asyncio
+import sqlite3
 from nats.aio.client import Client as NATS
 from ultralytics import YOLO
+from datetime import datetime
 import easyocr
 
 NATS_URL = os.environ.get("NATS_URL")
 DETECTION_MODEL_PATH = os.environ.get("DETECTION_MODEL_PATH")
+DB_PATH = os.environ.get("DB_PATH", "parking.db")
+CAR_PARK_ID = 1
 
-async def open_barrier(nc: NATS, barrier_id: str):
-    try: 
-        reply = await nc.request(
-           f"{barrier_id}.trigger",
-           b"",
-           timeout=30 
+class ParkingDatabase:
+    """
+    Very small wrapper around SQLite for parking sessions.
+    """
+
+    def __init__(self, db_path: str, car_park_id: str):
+        self.db_path = db_path
+        self.car_park_id = car_park_id
+        # check_same_thread=False because we may hit this from different asyncio tasks
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+
+    def init_db(self):
+        cur = self.conn.cursor()
+
+        # Table with one row per parking visit
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS parking_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plate TEXT NOT NULL,
+                car_park_id TEXT NOT NULL,
+                entry_time TEXT NOT NULL,
+                exit_time TEXT,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
         )
 
-        if reply.data == b"done":
-            print("Barrier opened successfully.")
+        self.conn.commit()
+
+    @staticmethod
+    def _now_iso() -> str:
+        # UTC ISO8601 with seconds, plus 'Z' to make it explicit
+        return datetime.utcnow().isoformat(timespec="seconds") + "Z"
+
+    def get_active_session(self, plate: str):
+        """
+        Return the most recent 'inside' session for this plate in this car park,
+        or None if there is no active session.
+        """
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            SELECT *
+            FROM parking_sessions
+            WHERE plate = ? AND car_park_id = ? AND status = 'inside'
+            ORDER BY entry_time DESC
+            LIMIT 1
+            """,
+            (plate, self.car_park_id),
+        )
+        row = cur.fetchone()
+        return row  # sqlite3.Row or None
+
+    def has_active_session(self, plate: str) -> bool:
+        return self.get_active_session(plate) is not None
+
+    def register_entry(self, plate: str):
+        """
+        Create a new 'inside' parking session for this plate,
+        but only if there is no active ('inside') session yet.
+        """
+        if self.has_active_session(plate):
+            print(f"[DB] Active session already exists for plate={plate}, skipping new entry row.")
+            return
+
+        now = self._now_iso()
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO parking_sessions
+                (plate, car_park_id, entry_time, status, created_at, updated_at)
+            VALUES
+                (?, ?, ?, 'inside', ?, ?)
+            """,
+            (plate, self.car_park_id, now, now, now),
+        )
+        self.conn.commit()
+        print(f"[DB] Registered entry for plate={plate}, car_park_id={self.car_park_id}")
+
+    def complete_exit(self, plate: str):
+        """
+        Mark the most recent 'inside' session for this plate as completed.
+        This will be used later when we actually implement exit-side logic.
+        """
+        now = self._now_iso()
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            UPDATE parking_sessions
+            SET exit_time = ?, status = 'completed', updated_at = ?
+            WHERE id = (
+                SELECT id FROM parking_sessions
+                WHERE plate = ? AND car_park_id = ? AND status = 'inside'
+                ORDER BY entry_time DESC
+                LIMIT 1
+            )
+            """,
+            (now, now, plate, self.car_park_id),
+        )
+        self.conn.commit()
+
+        if cur.rowcount == 0:
+            print(f"[DB] WARNING: No active session found for plate={plate} to complete.")
         else:
-            print("Barrier failure: ", reply.data.decode())
+            print(f"[DB] Completed exit for plate={plate}, car_park_id={self.car_park_id}")
 
-    except asyncio.TimeoutError:
-        print("Timeout: Communication with barrier failed.")
+async def open_barrier(nc: NATS, barrier_id: str):
+    """
+    Simulated barrier open.
+
+    In the real system this would send a NATS request to the barrier service:
+        await nc.request(f"{barrier_id}.trigger", b"", timeout=30)
+
+    For now we just log and pretend it worked so the rest of the edge logic
+    (detection + DB) can be developed and tested.
+    """
+    print(f"[SIM] open_barrier called for barrier_id={barrier_id} (no real barrier service running).")
+    return True
 
 
-async def checkpoint_handler(plate_text: str, id_: str, nc: NATS):
-    if  id_.split("_")[0] == "entry":
-        # register vehicle 
-        await open_barrier(nc, id_)
-    if id_.split("_")[0] == "exit":
-        payed = True  # placeholder for payment check
-        if payed:
-            print(f"Vehicle {plate_text} has paid. Opening exit barrier.")
+async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDatabase):
+    checkpoint_type = id_.split("_")[0]  # "entry" or "exit" (from camera_id)
+    
+    if checkpoint_type == "entry":
+        # Check if car is already inside
+        active = db.get_active_session(plate_text)
+        if active:
+            print(
+                f"[LOGIC] Plate {plate_text} is already inside "
+                f"(since {active['entry_time']}). Not creating a new session."
+            )
             await open_barrier(nc, id_)
         else:
-            print(f"Vehicle {plate_text} has not paid. Denying exit.")
+            print(f"[LOGIC] Plate {plate_text} is entering. Creating new session.")
+            db.register_entry(plate_text)
+            # TODO: send "entry" event to cloud so actor & DynamoDB know about it
+            await open_barrier(nc, id_)
 
+    elif checkpoint_type == "exit":
+        # TODO: ask cloud if this plate has paid (HTTP/API call)
+        payed = True  # placeholder for payment check
+
+        if not payed:
+            print(f"[LOGIC] Vehicle {plate_text} has NOT paid. Denying exit.")
+            return
+
+        active = db.get_active_session(plate_text)
+        if not active:
+            print(
+                f"[LOGIC] WARNING: Exit detected for plate {plate_text} "
+                "but there is no active 'inside' session in DB. "
+                "Possible tailgating or missed entry detection."
+            )
+            # - deny exit (no open_barrier)
+            # - or allow but flag for manual review
+            await open_barrier(nc, id_)  # for now we allow exit
+            return
+
+        print(f"[LOGIC] Plate {plate_text} exiting. Completing session id={active['id']}.")
+        db.complete_exit(plate_text)
+        await open_barrier(nc, id_)
+
+    else:
+        print(f"[LOGIC] Unknown checkpoint type for camera id {id_}, raw plate={plate_text}")
 
 def show_image(window_name, img):
     cv2.imshow(window_name, img)
@@ -46,6 +189,9 @@ def show_image(window_name, img):
 async def main():
     nc = NATS()
     await nc.connect(NATS_URL)
+
+    db = ParkingDatabase(DB_PATH, CAR_PARK_ID)
+    db.init_db()
 
     model = YOLO(DETECTION_MODEL_PATH, verbose=False)
     reader = easyocr.Reader(["en"], gpu=False)
@@ -87,7 +233,7 @@ async def main():
         if len(ocr_results) > 0:
             # each result = [bbox, text, confidence]
             plate_text = ocr_results[0][1]
-            await checkpoint_handler(plate_text, id_, nc)
+            await checkpoint_handler(plate_text, id_, nc, db)
         else:
             plate_text = "OCR failed to detect text"
         print(f"Detected Plate Box: {x1,y1,x2,y2} (YOLO conf={conf:.2f})")
@@ -103,13 +249,42 @@ async def main():
         print(f"Received exit image from {id_}.")
         # View disabled for now since docker container does not support GUI
         # cv2.imshow("Exit Camera", img)
+
+
+        # --- YOLO detection (same as entry) ---
+        result = model.predict(img, conf=0.25, save=False, verbose=False)[0]
+        boxes = result.boxes
+
+        if boxes is None or len(boxes) == 0:
+            print("[EXIT] No license plates detected.")
+            return
+
+        best_box = max(boxes, key=lambda b: float(b.conf[0]))
+        xyxy = best_box.xyxy[0].cpu().numpy().astype(int)
+        x1, y1, x2, y2 = xyxy
+        conf = float(best_box.conf[0])
+
+        plate_crop = img[y1:y2, x1:x2]
+        # show_image("Exit Camera Plate Crop", plate_crop)
+
+        # --- OCR ---
+        ocr_results = reader.readtext(plate_crop)
+        plate_text = None
+        if len(ocr_results) > 0:
+            plate_text = ocr_results[0][1]
+            await checkpoint_handler(plate_text, id_, nc, db)
+        else:
+            plate_text = "OCR failed to detect text"
+
+        print(f"[EXIT] Detected Plate Box: {x1,y1,x2,y2} (YOLO conf={conf:.2f})")
+        print(f"[EXIT] OCR Result: {plate_text}")
         
     await nc.subscribe("camera.exit", cb=exit_handler)
 
     print("Camera subscriber running...")
-    while True:
-        if cv2.pollKey() == 27:  # ESC key
-            break
-        await asyncio.sleep(1)
+    try:
+        await asyncio.Future()  # run forever until cancelled
+    finally:
+        await nc.drain()
 
 asyncio.run(main())

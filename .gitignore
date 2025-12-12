@@ -233,7 +233,5 @@ __marimo__/
 # latexmk generated files
 latexmkrc
 
-data
-
 # Detection Models
 *.pt
