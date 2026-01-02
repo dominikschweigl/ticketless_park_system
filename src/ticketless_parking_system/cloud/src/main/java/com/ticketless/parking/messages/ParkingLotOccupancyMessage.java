@@ -8,7 +8,7 @@ package com.ticketless.parking.messages;
  * This replaces the individual CarArrivedMessage/CarDepartedMessage pattern
  * with a simpler occupancy-based approach.
  */
-public class OccupancyMessage extends ParkingLotMessage {
+public class ParkingLotOccupancyMessage extends ParkingLotMessage {
     private static final long serialVersionUID = 1L;
 
     private final String parkId;
@@ -24,7 +24,7 @@ public class OccupancyMessage extends ParkingLotMessage {
      * @param timestamp        When this measurement was taken (edge server time)
      * @param edgeServerId     Identifier of the edge server sending this
      */
-    public OccupancyMessage(String parkId, int currentOccupancy, long timestamp, String edgeServerId) {
+    public ParkingLotOccupancyMessage(String parkId, int currentOccupancy, long timestamp, String edgeServerId) {
         this.parkId = parkId;
         this.currentOccupancy = currentOccupancy;
         this.timestamp = timestamp;

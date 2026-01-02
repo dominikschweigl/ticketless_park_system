@@ -93,7 +93,7 @@ public class ParkingSystemApp {
      */
     public void updateOccupancy(String parkId, int occupancy, String edgeServerId) {
         parkingLotManager.tell(
-                new OccupancyMessage(parkId, occupancy, System.currentTimeMillis(), edgeServerId),
+                new ParkingLotOccupancyMessage(parkId, occupancy, System.currentTimeMillis(), edgeServerId),
                 ActorRef.noSender()
         );
     }

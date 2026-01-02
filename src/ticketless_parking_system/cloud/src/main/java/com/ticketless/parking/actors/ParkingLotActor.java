@@ -69,8 +69,8 @@ public class ParkingLotActor extends AbstractActor {
     @Override
     public Receive createReceive() {
         return receiveBuilder()
-                .match(OccupancyMessage.class, this::handleOccupancyUpdate)
-                .match(GetStatusMessage.class, this::handleGetStatus)
+                .match(ParkingLotOccupancyMessage.class, this::handleOccupancyUpdate)
+                .match(GetParkingLotStatusMessage.class, this::handleGetStatus)
                 .matchAny(this::unhandled)
                 .build();
     }
@@ -79,7 +79,7 @@ public class ParkingLotActor extends AbstractActor {
      * Handles occupancy update from edge server.
      * Edge servers send this periodically with the current number of cars.
      */
-    private void handleOccupancyUpdate(OccupancyMessage message) {
+    private void handleOccupancyUpdate(ParkingLotOccupancyMessage message) {
         currentOccupancy = message.getCurrentOccupancy();
         lastUpdateTimestamp = message.getTimestamp();
         lastEdgeServerId = message.getEdgeServerId();
@@ -99,7 +99,7 @@ public class ParkingLotActor extends AbstractActor {
      * Handles a status query.
      * Returns a ParkingLotStatusMessage with the current state.
      */
-    private void handleGetStatus(GetStatusMessage message) {
+    private void handleGetStatus(GetParkingLotStatusMessage message) {
         boolean isFull = currentOccupancy >= maxCapacity;
         ParkingLotStatusMessage response = new ParkingLotStatusMessage(
                 parkId,

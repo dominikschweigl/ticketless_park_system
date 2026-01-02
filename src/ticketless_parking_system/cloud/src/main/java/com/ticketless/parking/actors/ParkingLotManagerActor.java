@@ -47,8 +47,8 @@ public class ParkingLotManagerActor extends AbstractActor {
         return receiveBuilder()
                 .match(RegisterParkMessage.class, this::handleRegisterPark)
                 .match(GetRegisteredParksMessage.class, this::handleGetRegisteredParks)
-                .match(OccupancyMessage.class, this::handleOccupancyUpdate)
-                .match(GetStatusMessage.class, this::handleGetStatus)
+                .match(ParkingLotOccupancyMessage.class, this::handleOccupancyUpdate)
+                .match(GetParkingLotStatusMessage.class, this::handleGetStatus)
                 .matchAny(this::unhandled)
                 .build();
     }
@@ -96,7 +96,7 @@ public class ParkingLotManagerActor extends AbstractActor {
      * Routes occupancy update messages to the appropriate parking lot.
      * Edge servers send this with the current occupancy count.
      */
-    private void handleOccupancyUpdate(OccupancyMessage message) {
+    private void handleOccupancyUpdate(ParkingLotOccupancyMessage message) {
         String parkId = message.getParkId();
         ActorRef parkActor = parkActors.get(parkId);
         if (parkActor != null) {
@@ -112,7 +112,7 @@ public class ParkingLotManagerActor extends AbstractActor {
      * Note: This assumes the sender knows the parkId and will handle routing separately.
      * Alternatively, you could enhance GetStatusMessage to include parkId.
      */
-    private void handleGetStatus(GetStatusMessage message) {
+    private void handleGetStatus(GetParkingLotStatusMessage message) {
         log.warning("GetStatusMessage received at manager without parkId. " +
                 "Consider sending directly to ParkingLotActor or including parkId in message.");
     }
