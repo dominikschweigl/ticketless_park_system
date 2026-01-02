@@ -1,0 +1,11 @@
+.git
+.gitignore
+.idea
+*.iml
+target
+*.class
+*.jar
+*.md
+src/test
+Dockerfile
+.dockerignore
