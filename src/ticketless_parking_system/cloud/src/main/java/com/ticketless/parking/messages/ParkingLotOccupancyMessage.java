@@ -14,7 +14,6 @@ public class ParkingLotOccupancyMessage extends ParkingLotMessage {
     private final String parkId;
     private final int currentOccupancy;
     private final long timestamp;
-    private final String edgeServerId;
 
     /**
      * Creates an occupancy message.
@@ -22,13 +21,11 @@ public class ParkingLotOccupancyMessage extends ParkingLotMessage {
      * @param parkId           Unique identifier for the parking lot
      * @param currentOccupancy Number of cars currently in the lot
      * @param timestamp        When this measurement was taken (edge server time)
-     * @param edgeServerId     Identifier of the edge server sending this
      */
-    public ParkingLotOccupancyMessage(String parkId, int currentOccupancy, long timestamp, String edgeServerId) {
+    public ParkingLotOccupancyMessage(String parkId, int currentOccupancy, long timestamp) {
         this.parkId = parkId;
         this.currentOccupancy = currentOccupancy;
         this.timestamp = timestamp;
-        this.edgeServerId = edgeServerId;
     }
 
     public String getParkId() {
@@ -43,17 +40,12 @@ public class ParkingLotOccupancyMessage extends ParkingLotMessage {
         return timestamp;
     }
 
-    public String getEdgeServerId() {
-        return edgeServerId;
-    }
-
     @Override
     public String toString() {
         return "OccupancyMessage{" +
                 "parkId='" + parkId + '\'' +
                 ", currentOccupancy=" + currentOccupancy +
                 ", timestamp=" + timestamp +
-                ", edgeServerId='" + edgeServerId + '\'' +
                 '}';
     }
 }

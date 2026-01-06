@@ -29,7 +29,6 @@ public class ParkingLotActor extends AbstractActor {
     private final int maxCapacity;
     private int currentOccupancy;
     private long lastUpdateTimestamp;
-    private String lastEdgeServerId;
 
     /**
      * Creates a new ParkingLotActor instance.
@@ -42,7 +41,6 @@ public class ParkingLotActor extends AbstractActor {
         this.maxCapacity = maxCapacity;
         this.currentOccupancy = 0;
         this.lastUpdateTimestamp = System.currentTimeMillis();
-        this.lastEdgeServerId = "unknown";
         log.info("ParkingLotActor initialized for park {} with capacity {}", parkId, maxCapacity);
     }
 
@@ -82,17 +80,15 @@ public class ParkingLotActor extends AbstractActor {
     private void handleOccupancyUpdate(ParkingLotOccupancyMessage message) {
         currentOccupancy = message.getCurrentOccupancy();
         lastUpdateTimestamp = message.getTimestamp();
-        lastEdgeServerId = message.getEdgeServerId();
 
         // Validate occupancy doesn't exceed capacity
         if (currentOccupancy > maxCapacity) {
-            log.warning("Occupancy {} exceeds capacity {} for park {}. " +
-                    "This may indicate a sensor error at edge server {}",
-                    currentOccupancy, maxCapacity, parkId, lastEdgeServerId);
+            log.warning("Occupancy {} exceeds capacity {} for park {}. ",
+                    currentOccupancy, maxCapacity, parkId);
         }
 
-        log.info("Occupancy update for park {}: {}/{} cars (from edge server {})",
-                parkId, currentOccupancy, maxCapacity, lastEdgeServerId);
+        log.info("Occupancy update for park {}: {}/{} cars",
+                parkId, currentOccupancy, maxCapacity);
     }
 
     /**

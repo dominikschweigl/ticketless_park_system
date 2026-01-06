@@ -49,89 +49,6 @@ This is a distributed parking management system with the following architecture:
     └───────────┘  └───────────┘  └───────────┘
 ```
 
-### Key Design Principles
-
-1. **Source of Truth**: Edge servers (with sensors) are the SOURCE OF TRUTH. They measure actual occupancy and send it to cloud.
-
-2. **Occupancy-Based Approach**: Instead of tracking individual car arrivals/departures, the system uses periodic occupancy snapshots.
-
-3. **One Actor Per Parking Lot**: Each parking lot gets its own `ParkingLotActor` for isolation and independent scaling.
-
-4. **Simple State Model**: Cloud mirrors occupancy received from edge servers; no complex event correlation needed.
-
-5. **Eventual Consistency**: If an update is lost, the next occupancy message within 5-10 seconds corrects the state.
-
-6. **Actor Model**: Uses Akka's actor model for concurrent handling of multiple parking lots and fault tolerance.
-
-### Message Flow
-
-#### Registration Flow
-```
-Edge Server
-    │
-    ├─ RegisterParkMessage(lot-id, capacity, edge-server-id)
-    │
-    ▼
-ParkingLotManagerActor
-    │
-    ├─ Creates ParkingLotActor("lot-id", capacity)
-    │
-    └─▶ ParkRegisteredMessage(lot-id, capacity, actor-ref)
-       
-    Back to Edge Server
-```
-
-#### Occupancy Update Flow
-```
-Edge Server (via sensors measuring actual cars)
-    │
-    ├─ OccupancyMessage("lot-01", 18, timestamp, "edge-server-01")
-    │
-    ▼
-ParkingLotManagerActor
-    │
-    ├─ Routes to ParkingLotActor("lot-01")
-    │
-    ▼
-ParkingLotActor("lot-01")
-    │
-    ├─ Updates occupancy: 18/50
-    └─ Logs: "Occupancy update for lot-01: 18/50 cars"
-```
-    ├─ Logs arrival
-    │
-    └─ (Every 5 seconds)
-       ▼
-       CarParkStateUpdateMessage sent
-       (current: 23/50, timestamp)
-```
-
-### Actor Model: Losse vs Strongly Typed
-
-- **Actor Model**: Akka actors are built on the actor model - they process messages sequentially in a mailbox
-- **Non-blocking**: All message processing is non-blocking; heavy operations should be offloaded
-- **Supervision**: Actors can supervise child actors and define failure recovery strategies
-- **Remote Transparency**: Same code works locally, in a cluster, or distributed across machines
-
-## Project Structure
-
-```
-.
-├── src/
-│   └── main/
-│       ├── java/
-│       │   └── com/ticketless/parking/
-│       │       ├── actors/         # Akka actors
-│       │       ├── messages/       # Actor messages
-│       │       └── app/            # Application entry point
-│       └── resources/
-│           ├── application.conf    # Akka configuration
-│           └── logback.xml         # Logging configuration
-├── pom.xml                         # Maven dependencies
-├── Dockerfile                      # Docker image definition
-└── README.md                       # This file
-```
-
 ## Building
 
 ### Prerequisites
@@ -171,9 +88,31 @@ docker build -t parking-system:latest .
 
 ```bash
 docker run -it --rm \
+  -p 8080:8080 \
   -e PARKING_ENVIRONMENT=development \
   -e PARKING_ENABLE_METRICS=false \
+  -e HTTP_PORT=8080 \
   parking-system:latest
+```
+
+Test the HTTP API:
+
+```bash
+# Health check
+curl http://localhost:8080/health
+
+# Register parking lot
+curl -X POST http://localhost:8080/api/parking-lots \
+  -H "Content-Type: application/json" \
+  -d '{"parkId":"lot-test","maxCapacity":100}'
+
+# Update occupancy
+curl -X POST http://localhost:8080/api/occupancy \
+  -H "Content-Type: application/json" \
+  -d '{"parkId":"lot-test","currentOccupancy":25}'
+
+# Get status
+curl http://localhost:8080/api/parking-lots/lot-test
 ```
 
 ### AWS ECS Deployment
@@ -243,6 +182,15 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/parking-system:late
   ]
 }
 ```
+
+## API Endpunkte
+
+| Method | Endpoint | Beschreibung |
+|--------|----------|--------------|
+| GET | `/health` | Health Check |
+| POST | `/api/parking-lots` | Parking Lot registrieren |
+| POST | `/api/occupancy` | Occupancy Update senden |
+| GET | `/api/parking-lots/{id}` | Status abfragen |
 
 ## Core Components
 
@@ -332,67 +280,6 @@ private void handleReserveSpace(ReserveSpaceMessage message) {
     // Implementation
 }
 ```
-
-## Edge Server Integration
-
-### Typical Edge Server Workflow
-
-The edge server is responsible for measuring actual occupancy via sensors and periodically reporting it:
-
-```java
-// 1. Edge server starts and registers its parking lots
-ParkingSystemClient client = new ParkingSystemClient("cloud-system-url");
-client.registerParkingLot("lot-01", 50, "edge-server-01");
-client.registerParkingLot("lot-02", 100, "edge-server-01");
-
-// 2. Periodically query sensors and send occupancy updates
-while (running) {
-    // Read from parking lot sensors (your sensor integration here)
-    int currentOccupancy = sensorSystem.readParkingLotOccupancy("lot-01");
-    
-    // Send occupancy snapshot to cloud (this is the SOURCE OF TRUTH)
-    client.updateOccupancy("lot-01", currentOccupancy, "edge-server-01");
-    
-    // Sleep for a reasonable interval (e.g., 5-10 seconds)
-    Thread.sleep(5000);
-    
-    // Optionally poll cloud for status
-    CarParkStatus status = client.getParkStatus("lot-01");
-    System.out.println("Cloud sees: " + status.getCurrentOccupancy() + "/" + status.getMaxCapacity());
-}
-```
-
-### Advantages of Occupancy-Based Approach
-
-1. **Simple**: Edge server just reads a sensor and sends a number
-2. **Robust**: Works even if many messages are lost (next update corrects state)
-3. **Single Source of Truth**: Edge server sensors are authoritative
-4. **No Event Ordering Issues**: Occupancy is absolute, not relative
-5. **Handles Sensor Errors**: If sensor reads wrong, only that update is affected
-6. **No Clock Sync Required**: Edge server timestamps not strictly needed
-7. **Easy Debugging**: You can see exactly what sensors reported
-
-### Example: Edge Server Integration Code
-
-Edge servers don't need the complex CarArrivedMessage/CarDepartedMessage logic anymore. Instead:
-
-```java
-// OLD APPROACH (replaced):
-// client.sendCarArrived("lot-01_car-001");
-// client.sendCarDeparted("lot-01_car-001");
-
-// NEW APPROACH (much simpler):
-int occupancy = sensorSystem.countParkedCars("lot-01");
-client.updateOccupancy("lot-01", occupancy, "edge-server-01");
-```
-
-### Fault Tolerance
-
-**What happens if a message is lost?**
-- The next occupancy update (5-10 seconds later) contains the correct state
-- Cloud automatically converges to correct occupancy
-- No manual reconciliation needed
-- Edge server can safely send updates at its own frequency
 
 ## Extending the System
 

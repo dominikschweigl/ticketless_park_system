@@ -34,6 +34,10 @@ public class ParkingLotStatusMessage extends ParkingLotMessage {
         return isFull;
     }
 
+    public int getAvailableSpaces() {
+        return maxCapacity - currentOccupancy;
+    }
+
     @Override
     public String toString() {
         return "ParkingLotStatusMessage{" +

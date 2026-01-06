@@ -41,6 +41,18 @@
             <version>1.2.11</version>
         </dependency>
 
+        <!-- Akka HTTP for REST API -->
+        <dependency>
+            <groupId>com.typesafe.akka</groupId>
+            <artifactId>akka-http_${scala.version}</artifactId>
+            <version>10.2.10</version>
+        </dependency>
+        <dependency>
+            <groupId>com.typesafe.akka</groupId>
+            <artifactId>akka-stream_${scala.version}</artifactId>
+            <version>${akka.version}</version>
+        </dependency>
+
         <!-- JSON serialization -->
         <dependency>
             <groupId>com.google.code.gson</groupId>

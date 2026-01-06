@@ -9,12 +9,10 @@ public class RegisterParkMessage extends ParkingLotMessage {
 
     private final String parkId;
     private final int maxCapacity;
-    private final String edgeServerId;
 
-    public RegisterParkMessage(String parkId, int maxCapacity, String edgeServerId) {
+    public RegisterParkMessage(String parkId, int maxCapacity) {
         this.parkId = parkId;
         this.maxCapacity = maxCapacity;
-        this.edgeServerId = edgeServerId;
     }
 
     public String getParkId() {
@@ -25,16 +23,11 @@ public class RegisterParkMessage extends ParkingLotMessage {
         return maxCapacity;
     }
 
-    public String getEdgeServerId() {
-        return edgeServerId;
-    }
-
     @Override
     public String toString() {
         return "RegisterParkMessage{" +
                 "parkId='" + parkId + '\'' +
                 ", maxCapacity=" + maxCapacity +
-                ", edgeServerId='" + edgeServerId + '\'' +
                 '}';
     }
 }

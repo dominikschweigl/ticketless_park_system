@@ -105,6 +105,12 @@ logic at the edge, the system remains responsive even under cloud latency or
 temporary disconnection, while the cloud only needs to receive high-level
 events such as occupancy updates or payment checks.
 
+\subsection{Cloud Implementation}
+Akka HTTP is deployed as an embedded HTTP server within the same ActorSystem as the
+parking actors. This avoids multiple ActorSystems per JVM, enables direct actor communication
+from HTTP routes, and ensures consistent lifecycle management. The HTTP server acts as a
+synchronous API boundary for Python-based edge servers, while internal logic remains fully
+actor-driven.
 
 \section{Evaluation}
 Stress your application to prove the correctness of your implementation, be aware of its main limitations. Explain first the experiments done (e.g., vary the number of input events), then introduce and discuss the results obtained.

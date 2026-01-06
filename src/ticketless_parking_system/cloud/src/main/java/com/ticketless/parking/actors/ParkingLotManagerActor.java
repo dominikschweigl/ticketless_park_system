@@ -75,8 +75,8 @@ public class ParkingLotManagerActor extends AbstractActor {
         parkActors.put(parkId, parkActor);
         parkCapacities.put(parkId, message.getMaxCapacity());
 
-        log.info("Registered parking lot {} (capacity: {}) from edge server {}",
-                parkId, message.getMaxCapacity(), message.getEdgeServerId());
+        log.info("Registered parking lot {} (capacity: {})",
+                parkId, message.getMaxCapacity());
 
         // Send confirmation back to the edge server
         sender().tell(new ParkRegisteredMessage(parkId, message.getMaxCapacity(), parkActor), self());
@@ -102,19 +102,23 @@ public class ParkingLotManagerActor extends AbstractActor {
         if (parkActor != null) {
             parkActor.tell(message, sender());
         } else {
-            log.warning("Parking lot {} not found for occupancy update from edge server {}", 
-                    parkId, message.getEdgeServerId());
+            log.warning("Parking lot {} not found for occupancy update", parkId);
         }
     }
 
     /**
      * Routes status queries to the appropriate parking lot.
-     * Note: This assumes the sender knows the parkId and will handle routing separately.
-     * Alternatively, you could enhance GetStatusMessage to include parkId.
      */
     private void handleGetStatus(GetParkingLotStatusMessage message) {
-        log.warning("GetStatusMessage received at manager without parkId. " +
-                "Consider sending directly to ParkingLotActor or including parkId in message.");
+        String parkId = message.getParkId();
+        ActorRef parkActor = parkActors.get(parkId);
+
+        if (parkActor != null) {
+            parkActor.forward(message, getContext());
+        } else {
+            log.warning("Parking lot {} not found for status query", parkId);
+            sender().tell(new ParkingLotStatusMessage(parkId, 0, 0, false), self());
+        }
     }
 
     @Override

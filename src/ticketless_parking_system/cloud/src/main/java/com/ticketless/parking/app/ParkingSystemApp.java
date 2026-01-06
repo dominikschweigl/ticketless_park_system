@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
 import com.ticketless.parking.actors.ParkingLotManagerActor;
+import com.ticketless.parking.http.ParkingHttpServer;
 import com.ticketless.parking.messages.*;
 
 /**
@@ -42,6 +43,7 @@ public class ParkingSystemApp {
 
     private final ActorSystem actorSystem;
     private final ActorRef parkingLotManager;
+    private final ParkingHttpServer httpServer;
 
     /**
      * Initializes the Parking System application.
@@ -53,6 +55,17 @@ public class ParkingSystemApp {
                 ParkingLotManagerActor.props(),
                 "parking-lot-manager"
         );
+
+        // Initialize HTTP server for Python edge server communication
+        this.httpServer = new ParkingHttpServer(actorSystem, parkingLotManager);
+
+        // Get HTTP server configuration from environment or use defaults
+        String httpHost = System.getenv().getOrDefault("HTTP_HOST", "0.0.0.0");
+        int httpPort = Integer.parseInt(System.getenv().getOrDefault("HTTP_PORT", "8080"));
+
+        // Start HTTP server
+        httpServer.start(httpHost, httpPort);
+
         logger.info("ParkingSystemApp initialized with ActorSystem: {}", actorSystem.name());
     }
 
@@ -62,11 +75,10 @@ public class ParkingSystemApp {
      *
      * @param parkId      Unique identifier for the parking lot
      * @param maxCapacity Maximum capacity of the parking lot
-     * @param edgeServerId Identifier of the edge server registering this lot
      */
-    public void registerParkingLot(String parkId, int maxCapacity, String edgeServerId) {
+    public void registerParkingLot(String parkId, int maxCapacity) {
         parkingLotManager.tell(
-                new RegisterParkMessage(parkId, maxCapacity, edgeServerId),
+                new RegisterParkMessage(parkId, maxCapacity),
                 ActorRef.noSender()
         );
     }
@@ -87,13 +99,12 @@ public class ParkingSystemApp {
      * This is called by edge servers periodically with the current number of cars.
      * This REPLACES the old CarArrivedMessage/CarDepartedMessage approach.
      *
-     * @param parkId       Parking lot identifier
-     * @param occupancy    Current number of cars in the lot (from sensors)
-     * @param edgeServerId Identifier of the edge server sending this update
+     * @param parkId    Parking lot identifier
+     * @param occupancy Current number of cars in the lot (from sensors)
      */
-    public void updateOccupancy(String parkId, int occupancy, String edgeServerId) {
+    public void updateOccupancy(String parkId, int occupancy) {
         parkingLotManager.tell(
-                new ParkingLotOccupancyMessage(parkId, occupancy, System.currentTimeMillis(), edgeServerId),
+                new ParkingLotOccupancyMessage(parkId, occupancy, System.currentTimeMillis()),
                 ActorRef.noSender()
         );
     }
@@ -103,6 +114,7 @@ public class ParkingSystemApp {
      */
     public void shutdown() {
         logger.info("Shutting down ParkingSystemApp");
+        httpServer.stop();
         actorSystem.terminate();
     }
 
@@ -117,9 +129,9 @@ public class ParkingSystemApp {
 
         // Example: Edge servers register their parking lots
         logger.info("Edge servers registering parking lots...");
-        app.registerParkingLot("lot-01", 50, "edge-server-01");
-        app.registerParkingLot("lot-02", 100, "edge-server-02");
-        app.registerParkingLot("lot-03", 25, "edge-server-01");
+        app.registerParkingLot("lot-01", 50);
+        app.registerParkingLot("lot-02", 100);
+        app.registerParkingLot("lot-03", 25);
 
         // Give the system a moment to process registrations
         try {
@@ -132,30 +144,30 @@ public class ParkingSystemApp {
         logger.info("Simulating occupancy updates from edge servers...");
         
         // Edge server 1 sending occupancy updates for lot-01
-        app.updateOccupancy("lot-01", 15, "edge-server-01");
+        app.updateOccupancy("lot-01", 15);
         try {
             Thread.sleep(100);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
         
-        app.updateOccupancy("lot-01", 18, "edge-server-01");
-        
+        app.updateOccupancy("lot-01", 18);
+
         // Edge server 2 sending occupancy updates for lot-02
         try {
             Thread.sleep(100);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        app.updateOccupancy("lot-02", 45, "edge-server-02");
-        
+        app.updateOccupancy("lot-02", 45);
+
         // Edge server 1 sending occupancy updates for lot-03
         try {
             Thread.sleep(100);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        app.updateOccupancy("lot-03", 8, "edge-server-01");
+        app.updateOccupancy("lot-03", 8);
 
         // Keep the application running
         logger.info("Parking System is running. Press Ctrl+C to exit.");
