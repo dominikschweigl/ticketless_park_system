@@ -3,3 +3,4 @@ numpy
 nats-py
 ultralytics
 easyocr
+httpx

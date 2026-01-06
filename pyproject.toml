@@ -10,7 +10,8 @@ dependencies = [
     "numpy",
     "nats-py",
     "ultralytics",
-    "easyocr"
+    "easyocr",
+    "httpx"
 ]
 
 authors = [

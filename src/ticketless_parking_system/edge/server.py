@@ -3,15 +3,21 @@ import cv2
 import numpy as np
 import asyncio
 import sqlite3
+import os
 from nats.aio.client import Client as NATS
 from ultralytics import YOLO
 from datetime import datetime
 import easyocr
 
+from cloud_parking_client import CloudParkingClient
+from parkinglot_tracker import ParkingLotTracker
+
 NATS_URL = os.environ.get("NATS_URL")
 DETECTION_MODEL_PATH = os.environ.get("DETECTION_MODEL_PATH")
 DB_PATH = os.environ.get("DB_PATH", "parking.db")
-CAR_PARK_ID = 1
+CAR_PARK_ID = os.environ.get("CAR_PARK_ID", "lot-01")
+CAR_PARK_CAPACITY = int(os.environ.get("CAR_PARK_CAPACITY", "50"))
+CLOUD_URL = os.environ.get("CLOUD_URL", "http://localhost:8080")
 
 class ParkingDatabase:
     """
@@ -137,9 +143,9 @@ async def open_barrier(nc: NATS, barrier_id: str):
     return True
 
 
-async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDatabase):
+async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDatabase, tracker: ParkingLotTracker):
     checkpoint_type = id_.split("_")[0]  # "entry" or "exit" (from camera_id)
-    
+
     if checkpoint_type == "entry":
         # Check if car is already inside
         active = db.get_active_session(plate_text)
@@ -152,7 +158,11 @@ async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDat
         else:
             print(f"[LOGIC] Plate {plate_text} is entering. Creating new session.")
             db.register_entry(plate_text)
-            # TODO: send "entry" event to cloud so actor & DynamoDB know about it
+
+            # Increment occupancy and send to cloud
+            await tracker.increment_occupancy()
+            print(f"[CLOUD] Updated occupancy to {tracker.current_occupancy}/{tracker.max_capacity}")
+
             await open_barrier(nc, id_)
 
     elif checkpoint_type == "exit":
@@ -177,6 +187,11 @@ async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDat
 
         print(f"[LOGIC] Plate {plate_text} exiting. Completing session id={active['id']}.")
         db.complete_exit(plate_text)
+
+        # Decrement occupancy and send to cloud
+        await tracker.decrement_occupancy()
+        print(f"[CLOUD] Updated occupancy to {tracker.current_occupancy}/{tracker.max_capacity}")
+
         await open_barrier(nc, id_)
 
     else:
@@ -187,12 +202,38 @@ def show_image(window_name, img):
     cv2.waitKey(1)
 
 async def main():
+    # Initialize NATS connection
     nc = NATS()
     await nc.connect(NATS_URL)
 
+    # Initialize database
     db = ParkingDatabase(DB_PATH, CAR_PARK_ID)
     db.init_db()
 
+    # Initialize cloud client
+    cloud_client = CloudParkingClient(CLOUD_URL)
+
+    # Check cloud health
+    if await cloud_client.health_check():
+        print(f"[CLOUD] Connected to cloud system at {CLOUD_URL}")
+    else:
+        print(f"[CLOUD] WARNING: Cannot reach cloud system at {CLOUD_URL}")
+
+    # Initialize parking lot tracker
+    tracker = ParkingLotTracker(
+        cloud_client=cloud_client,
+        park_id=CAR_PARK_ID,
+        max_capacity=CAR_PARK_CAPACITY
+    )
+
+    # Register parking lot with cloud
+    try:
+        await tracker.register()
+        print(f"[CLOUD] Registered parking lot {CAR_PARK_ID} (capacity: {CAR_PARK_CAPACITY})")
+    except Exception as e:
+        print(f"[CLOUD] Failed to register parking lot: {e}")
+
+    # Initialize ML models
     model = YOLO(DETECTION_MODEL_PATH, verbose=False)
     reader = easyocr.Reader(["en"], gpu=False)
 
@@ -200,7 +241,7 @@ async def main():
         id_ = msg.header.get("camera_id", "unknown")
         jpg = np.frombuffer(msg.data, np.uint8)
         img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
-        
+
         print(f"Received entry image from {id_}.")
         # View disabled for now since docker container does not support GUI
         # show_image("Entry Camera", img)
@@ -216,7 +257,7 @@ async def main():
 
         # ---- Select highest-confidence box ----
         best_box = max(boxes, key=lambda b: float(b.conf[0]))
-        
+
         xyxy = best_box.xyxy[0].cpu().numpy().astype(int)
         x1, y1, x2, y2 = xyxy
         conf = float(best_box.conf[0])
@@ -225,7 +266,7 @@ async def main():
         plate_crop = img[y1:y2, x1:x2]
         # View disabled for now since docker container does not support GUI
         # show_image("Entry Camera Plate Crop", plate_crop)
-    
+
         # ---- Run OCR ----
         ocr_results = reader.readtext(plate_crop)
 
@@ -233,12 +274,12 @@ async def main():
         if len(ocr_results) > 0:
             # each result = [bbox, text, confidence]
             plate_text = ocr_results[0][1]
-            await checkpoint_handler(plate_text, id_, nc, db)
+            await checkpoint_handler(plate_text, id_, nc, db, tracker)
         else:
             plate_text = "OCR failed to detect text"
         print(f"Detected Plate Box: {x1,y1,x2,y2} (YOLO conf={conf:.2f})")
         print(f"OCR Result: {plate_text}")
-        
+
     await nc.subscribe("camera.entry", cb=entry_handler)
 
     async def exit_handler(msg):
@@ -272,19 +313,23 @@ async def main():
         plate_text = None
         if len(ocr_results) > 0:
             plate_text = ocr_results[0][1]
-            await checkpoint_handler(plate_text, id_, nc, db)
+            await checkpoint_handler(plate_text, id_, nc, db, tracker)
         else:
             plate_text = "OCR failed to detect text"
 
         print(f"[EXIT] Detected Plate Box: {x1,y1,x2,y2} (YOLO conf={conf:.2f})")
         print(f"[EXIT] OCR Result: {plate_text}")
-        
+
     await nc.subscribe("camera.exit", cb=exit_handler)
 
     print("Camera subscriber running...")
+    print(f"Parking Lot: {CAR_PARK_ID} (Capacity: {CAR_PARK_CAPACITY})")
+    print(f"Cloud URL: {CLOUD_URL}")
+
     try:
         await asyncio.Future()  # run forever until cancelled
     finally:
         await nc.drain()
+        await cloud_client.close()
 
 asyncio.run(main())
