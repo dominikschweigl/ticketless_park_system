@@ -3,6 +3,7 @@ package com.ticketless.parking.app;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.javadsl.AskPattern;
+import akka.actor.typed.Props;
 import scala.concurrent.duration.FiniteDuration;
 import java.time.Duration;
 import com.typesafe.config.Config;
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 
 import com.ticketless.parking.actors.ParkingLotManagerActor;
+import com.ticketless.parking.actors.PaymentActor;
 import com.ticketless.parking.http.ParkingHttpServer;
 import com.ticketless.parking.messages.*;
 
@@ -24,6 +26,7 @@ public class ParkingSystemApp {
 
     private final ActorSystem<ParkingLotManagerActor.Command> actorSystem;
     private final ActorRef<ParkingLotManagerActor.Command> parkingLotManager;
+    private final ActorRef<PaymentActor.Command> paymentActor;
     private final ParkingHttpServer httpServer;
 
     /**
@@ -33,9 +36,10 @@ public class ParkingSystemApp {
         Config config = ConfigFactory.load();
         this.actorSystem = ActorSystem.create(ParkingLotManagerActor.create(), "ParkingSystem", config);
         this.parkingLotManager = actorSystem;
+        this.paymentActor = actorSystem.systemActorOf(PaymentActor.create(), "payment-actor", Props.empty());
 
         // Initialize HTTP server for Python edge server communication
-        this.httpServer = new ParkingHttpServer(actorSystem, parkingLotManager);
+        this.httpServer = new ParkingHttpServer(actorSystem, parkingLotManager, paymentActor);
 
         // Get HTTP server configuration from environment or use defaults
         String httpHost = System.getenv().getOrDefault("HTTP_HOST", "0.0.0.0");

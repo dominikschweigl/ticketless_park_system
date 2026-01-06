@@ -188,6 +188,62 @@ class CloudParkingClient:
         logger.info(f"Parking lot {park_id} deregistered successfully: {result}")
         return result
 
+    async def payment_car_enter(self, license_plate: str, entry_timestamp: int | None = None) -> Dict[str, Any]:
+        """
+        Notify the cloud that a car has entered (record entry timestamp).
 
+        Args:
+            license_plate: Car license plate identifier
+            entry_timestamp: Optional epoch millis; if None, server will use current time
 
+        Returns:
+            Dict with status information, e.g., {"status": "recorded"}
+        """
+        url = f"{self.base_url}/api/payment/enter"
+        data = {"licensePlate": license_plate}
+        if entry_timestamp is not None:
+            data["entryTimestamp"] = entry_timestamp
 
+        resp = await self.client.post(url, json=data)
+        # Expected 202 Accepted with plain text body "recorded"
+        if resp.status_code not in (200, 202):
+            resp.raise_for_status()
+        txt = resp.text.strip()
+        # Normalize into dict
+        return {"status": txt or "recorded"}
+
+    async def payment_pay(self, license_plate: str) -> Dict[str, Any]:
+        """
+        Mark a car as paid and return computed price based on parking duration.
+
+        Returns the PaymentStatus JSON from the server.
+        """
+        url = f"{self.base_url}/api/payment/pay"
+        data = {"licensePlate": license_plate}
+        resp = await self.client.post(url, json=data)
+        resp.raise_for_status()
+        return resp.json()
+
+    async def payment_check(self, license_plate: str) -> Dict[str, Any]:
+        """
+        Check payment status when the car is leaving the car park.
+
+        Returns the PaymentStatus JSON from the server.
+        """
+        url = f"{self.base_url}/api/payment/check"
+        resp = await self.client.get(url, params={"licensePlate": license_plate})
+        resp.raise_for_status()
+        return resp.json()
+
+    async def payment_exit(self, license_plate: str) -> Dict[str, Any]:
+        """
+        Delete the car's session after it left the car park.
+
+        Returns dict {"status": "deleted"} on success.
+        """
+        url = f"{self.base_url}/api/payment/exit"
+        resp = await self.client.delete(url, params={"licensePlate": license_plate})
+        if resp.status_code not in (200, 202):
+            resp.raise_for_status()
+        txt = resp.text.strip()
+        return {"status": txt or "deleted"}

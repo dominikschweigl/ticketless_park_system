@@ -143,7 +143,7 @@ async def open_barrier(nc: NATS, barrier_id: str):
     return True
 
 
-async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDatabase, tracker: ParkingLotTracker):
+async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDatabase, tracker: ParkingLotTracker, cloud_client: CloudParkingClient):
     checkpoint_type = id_.split("_")[0]  # "entry" or "exit" (from camera_id)
 
     if checkpoint_type == "entry":
@@ -159,6 +159,13 @@ async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDat
             print(f"[LOGIC] Plate {plate_text} is entering. Creating new session.")
             db.register_entry(plate_text)
 
+            # Inform cloud payment service (record entry)
+            try:
+                pay_res = await cloud_client.payment_car_enter(plate_text)
+                print(f"[CLOUD][PAYMENT] enter recorded for {plate_text}: {pay_res}")
+            except Exception as e:
+                print(f"[CLOUD][PAYMENT] enter failed for {plate_text}: {e}")
+
             # Increment occupancy and send to cloud
             await tracker.increment_occupancy()
             print(f"[CLOUD] Updated occupancy to {tracker.current_occupancy}/{tracker.max_capacity}")
@@ -166,11 +173,19 @@ async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDat
             await open_barrier(nc, id_)
 
     elif checkpoint_type == "exit":
-        # TODO: ask cloud if this plate has paid (HTTP/API call)
-        payed = True  # placeholder for payment check
+        # Check with cloud if this plate has paid
+        try:
+            status = await cloud_client.payment_check(plate_text)
+            paid = bool(status.get("paid", False))
+            price = status.get("priceCents", 0)
+            print(f"[CLOUD][PAYMENT] check {plate_text}: paid={paid}, priceCents={price}")
+        except Exception as e:
+            print(f"[CLOUD][PAYMENT] check failed for {plate_text}: {e}")
+            paid = False
+            price = 0
 
-        if not payed:
-            print(f"[LOGIC] Vehicle {plate_text} has NOT paid. Denying exit.")
+        if not paid:
+            print(f"[LOGIC] Vehicle {plate_text} has NOT paid (due {price} cents). Denying exit.")
             return
 
         active = db.get_active_session(plate_text)
@@ -180,9 +195,8 @@ async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDat
                 "but there is no active 'inside' session in DB. "
                 "Possible tailgating or missed entry detection."
             )
-            # - deny exit (no open_barrier)
-            # - or allow but flag for manual review
-            await open_barrier(nc, id_)  # for now we allow exit
+            # For now allow exit but log
+            await open_barrier(nc, id_)
             return
 
         print(f"[LOGIC] Plate {plate_text} exiting. Completing session id={active['id']}.")
@@ -191,6 +205,13 @@ async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDat
         # Decrement occupancy and send to cloud
         await tracker.decrement_occupancy()
         print(f"[CLOUD] Updated occupancy to {tracker.current_occupancy}/{tracker.max_capacity}")
+
+        # Inform cloud payment that the car has left to cleanup record
+        try:
+            del_res = await cloud_client.payment_exit(plate_text)
+            print(f"[CLOUD][PAYMENT] exit deleted for {plate_text}: {del_res}")
+        except Exception as e:
+            print(f"[CLOUD][PAYMENT] exit delete failed for {plate_text}: {e}")
 
         await open_barrier(nc, id_)
 
@@ -274,7 +295,7 @@ async def main():
         if len(ocr_results) > 0:
             # each result = [bbox, text, confidence]
             plate_text = ocr_results[0][1]
-            await checkpoint_handler(plate_text, id_, nc, db, tracker)
+            await checkpoint_handler(plate_text, id_, nc, db, tracker, cloud_client)
         else:
             plate_text = "OCR failed to detect text"
         print(f"Detected Plate Box: {x1,y1,x2,y2} (YOLO conf={conf:.2f})")
@@ -313,7 +334,7 @@ async def main():
         plate_text = None
         if len(ocr_results) > 0:
             plate_text = ocr_results[0][1]
-            await checkpoint_handler(plate_text, id_, nc, db, tracker)
+            await checkpoint_handler(plate_text, id_, nc, db, tracker, cloud_client)
         else:
             plate_text = "OCR failed to detect text"
 

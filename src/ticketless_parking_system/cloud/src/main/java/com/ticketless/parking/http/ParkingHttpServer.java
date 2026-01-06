@@ -12,6 +12,7 @@ import akka.http.javadsl.model.StatusCodes;
 import akka.http.javadsl.server.Route;
 import com.google.gson.Gson;
 import com.ticketless.parking.actors.ParkingLotManagerActor;
+import com.ticketless.parking.actors.PaymentActor;
 import com.ticketless.parking.messages.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,13 +34,15 @@ public class ParkingHttpServer {
     private final ActorSystem<?> actorSystem;
     private final Scheduler scheduler;
     private final ActorRef<ParkingLotManagerActor.Command> parkingLotManager;
+    private final ActorRef<PaymentActor.Command> paymentActor;
     private final Gson gson;
     private CompletionStage<ServerBinding> binding;
 
-    public ParkingHttpServer(ActorSystem<?> actorSystem, ActorRef<ParkingLotManagerActor.Command> parkingLotManager) {
+    public ParkingHttpServer(ActorSystem<?> actorSystem, ActorRef<ParkingLotManagerActor.Command> parkingLotManager, ActorRef<PaymentActor.Command> paymentActor) {
         this.actorSystem = actorSystem;
         this.scheduler = actorSystem.scheduler();
         this.parkingLotManager = parkingLotManager;
+        this.paymentActor = paymentActor;
         this.gson = new Gson();
     }
 
@@ -102,6 +105,28 @@ public class ParkingHttpServer {
                     path(segment(), parkId -> concat(
                         get(() -> getParkingLotStatus(parkId)),
                         delete(() -> deregisterParkingLot(parkId))
+                    ))
+                )),
+                pathPrefix("payment", () -> concat(
+                    // Car enters: record entry timestamp
+                    path("enter", () -> post(() ->
+                        extractRequestEntity(entity -> onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem), strict ->
+                            carEnter(strict.getData().utf8String())
+                        ))
+                    )),
+                    // Pay: mark as paid, compute price
+                    path("pay", () -> post(() ->
+                        extractRequestEntity(entity -> onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem), strict ->
+                            pay(strict.getData().utf8String())
+                        ))
+                    )),
+                    // Check on leave: verify payment and give price
+                    path("check", () -> get(() ->
+                        parameter("licensePlate", lp -> checkOnLeave(lp))
+                    )),
+                    // Delete record after exit
+                    path("exit", () -> delete(() ->
+                        parameter("licensePlate", lp -> deleteOnExit(lp))
                     ))
                 ))
             ))
@@ -258,6 +283,69 @@ public class ParkingHttpServer {
         });
     }
 
+    /**
+     * Car enters the parking: record entry timestamp.
+     * POST /api/payment/enter
+     * Body: {"licensePlate": "ABC123", "entryTimestamp": 1633072800000}
+     */
+    private Route carEnter(String jsonBody) {
+        try {
+            CarEnterRequest req = gson.fromJson(jsonBody, CarEnterRequest.class);
+            long ts = req.entryTimestamp != null ? req.entryTimestamp : System.currentTimeMillis();
+            paymentActor.tell(new PaymentActor.CarEntered(req.licensePlate, ts));
+            return complete(StatusCodes.ACCEPTED, "recorded");
+        } catch (Exception e) {
+            logger.error("Error parsing car enter", e);
+            return complete(StatusCodes.BAD_REQUEST, "Invalid JSON");
+        }
+    }
+
+    /**
+     * Pay for the parking: mark as paid and compute price.
+     * POST /api/payment/pay
+     * Body: {"licensePlate": "ABC123"}
+     */
+    private Route pay(String jsonBody) {
+        try {
+            PayRequest req = gson.fromJson(jsonBody, PayRequest.class);
+            var fut = AskPattern.ask(paymentActor,
+                    (ActorRef<PaymentActor.PaymentStatus> reply) -> new PaymentActor.Pay(req.licensePlate, reply),
+                    ASK_TIMEOUT,
+                    scheduler);
+            return onSuccess(fut, status -> {
+                String json = gson.toJson(status);
+                return complete(StatusCodes.OK, json);
+            });
+        } catch (Exception e) {
+            logger.error("Error parsing pay", e);
+            return complete(StatusCodes.BAD_REQUEST, "Invalid JSON");
+        }
+    }
+
+    /**
+     * Check payment status on leave: verify payment and provide price.
+     * GET /api/payment/check?licensePlate=ABC123
+     */
+    private Route checkOnLeave(String licensePlate) {
+        var fut = AskPattern.ask(paymentActor,
+                (ActorRef<PaymentActor.PaymentStatus> reply) -> new PaymentActor.CheckOnLeave(licensePlate, reply),
+                ASK_TIMEOUT,
+                scheduler);
+        return onSuccess(fut, status -> complete(StatusCodes.OK, gson.toJson(status)));
+    }
+
+    /**
+     * Delete payment record after exit.
+     * DELETE /api/payment/exit?licensePlate=ABC123
+     */
+    private Route deleteOnExit(String licensePlate) {
+        var fut = AskPattern.ask(paymentActor,
+                (ActorRef<PaymentActor.Ack> reply) -> new PaymentActor.DeleteOnExit(licensePlate, reply),
+                ASK_TIMEOUT,
+                scheduler);
+        return onSuccess(fut, ack -> complete(StatusCodes.OK, "deleted"));
+    }
+
     // DTOs for HTTP requests/responses
     public static class RegisterParkRequest { public String parkId; public int maxCapacity; }
     public static class RegisterParkResponse { public String parkId; public int maxCapacity; public String status; public RegisterParkResponse(String parkId, int maxCapacity, String status) { this.parkId = parkId; this.maxCapacity = maxCapacity; this.status = status; } }
@@ -266,4 +354,7 @@ public class ParkingHttpServer {
     public static class ParkingLotStatusResponse { public String parkId; public int currentOccupancy; public int maxCapacity; public int availableSpaces; public ParkingLotStatusResponse(String parkId, int currentOccupancy, int maxCapacity, int availableSpaces) { this.parkId = parkId; this.currentOccupancy = currentOccupancy; this.maxCapacity = maxCapacity; this.availableSpaces = availableSpaces; } }
     public static class RegisteredParksResponse { public java.util.Map<String, Integer> parks; public RegisteredParksResponse(java.util.Map<String, Integer> parks) { this.parks = parks; } }
     public static class DeregisterParkResponse { public String parkId; public String status; public DeregisterParkResponse(String parkId, String status) { this.parkId = parkId; this.status = status; } }
+    // Payment DTOs
+    public static class CarEnterRequest { public String licensePlate; public Long entryTimestamp; }
+    public static class PayRequest { public String licensePlate; }
 }

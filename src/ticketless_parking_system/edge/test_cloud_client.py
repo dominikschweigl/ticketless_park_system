@@ -166,6 +166,59 @@ async def test_parking_lot_tracker():
         await client.close()
 
 
+async def test_payment_flow():
+    """Test the payment endpoints end-to-end."""
+    print("\n" + "=" * 60)
+    print("Testing Payment Flow")
+    print("=" * 60)
+
+    client = CloudParkingClient("http://localhost:8080")
+    plate = "TEST-PLATE-001"
+
+    try:
+        # 1. Enter
+        print("\n1. Car Enter...")
+        result = await client.payment_car_enter(plate)
+        print(f"   ✓ Enter recorded: {result}")
+
+        # 2. Check before pay
+        print("\n2. Check before Pay...")
+        status = await client.payment_check(plate)
+        print(f"   ✓ Status: paid={status['paid']}, priceCents={status['priceCents']}")
+
+        # 3. Pay
+        print("\n3. Pay...")
+        status = await client.payment_pay(plate)
+        print(f"   ✓ Paid: paid={status['paid']}, priceCents={status['priceCents']}")
+
+        # 4. Check after pay
+        print("\n4. Check after Pay...")
+        status = await client.payment_check(plate)
+        print(f"   ✓ Status after pay: paid={status['paid']}, priceCents={status['priceCents']}")
+
+        # 5. Exit (delete)
+        print("\n5. Exit...")
+        result = await client.payment_exit(plate)
+        print(f"   ✓ Exit deleted: {result}")
+
+        # 6. Check after exit (should be not found/paid=false)
+        print("\n6. Check after Exit...")
+        status = await client.payment_check(plate)
+        print(f"   ✓ Status after exit: paid={status['paid']}, priceCents={status['priceCents']}")
+
+        print("\n" + "=" * 60)
+        print("✓ Payment flow tests passed!")
+        print("=" * 60)
+        return True
+    except Exception as e:
+        print(f"\n✗ Payment test failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        await client.close()
+
+
 async def main():
     """Run all tests."""
     print("\n")
@@ -184,6 +237,7 @@ async def main():
     # Run tests
     test1 = await test_basic_client()
     test2 = await test_parking_lot_tracker()
+    test3 = await test_payment_flow()
 
     # Summary
     print("\n" + "=" * 60)
@@ -191,9 +245,10 @@ async def main():
     print("=" * 60)
     print(f"Basic Client Tests:       {'✓ PASSED' if test1 else '✗ FAILED'}")
     print(f"Parking Lot Tracker Tests: {'✓ PASSED' if test2 else '✗ FAILED'}")
+    print(f"Payment Flow Tests:        {'✓ PASSED' if test3 else '✗ FAILED'}")
     print("=" * 60)
 
-    if test1 and test2:
+    if test1 and test2 and test3:
         print("\n🎉 All tests passed! Your Python ↔ Akka communication works!")
         sys.exit(0)
     else:
