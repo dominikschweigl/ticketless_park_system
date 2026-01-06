@@ -39,6 +39,18 @@ class ParkingLotTracker:
             )
             self.registered = True
 
+    async def deregister(self):
+        """
+        Deregister this parking lot from the cloud system.
+
+        Call this when the edge server is shutting down or
+        the parking lot is being permanently closed.
+        """
+        if self.registered:
+            await self.cloud_client.deregister_parking_lot(self.park_id)
+            self.registered = False
+            logger.info(f"Parking lot {self.park_id} deregistered from cloud")
+
     async def update_occupancy(self, new_occupancy: int):
         """
         Update occupancy and send to cloud.

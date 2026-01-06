@@ -116,6 +116,9 @@ curl -X POST http://localhost:8080/api/occupancy \
 
 # Get status
 curl http://localhost:8080/api/parking-lots/lot-test
+
+# Deregister parking lot
+curl -X DELETE http://localhost:8080/api/parking-lots/lot-test
 ```
 
 ### AWS ECS Deployment
@@ -195,6 +198,7 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/parking-system:late
 | POST | `/api/parking-lots` | Parking Lot registrieren |
 | POST | `/api/occupancy` | Occupancy Update senden |
 | GET | `/api/parking-lots/{id}` | Status eines spezifischen Parkplatzes abfragen |
+| DELETE | `/api/parking-lots/{id}` | Parking Lot deregistrieren |
 
 ## Core Components
 

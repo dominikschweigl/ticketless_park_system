@@ -160,6 +160,34 @@ class CloudParkingClient:
 
         return response.json()
 
+    async def deregister_parking_lot(self, park_id: str) -> Dict[str, Any]:
+        """
+        Deregister a parking lot from the cloud system.
+
+        This should be called when an edge server goes offline or
+        a parking lot is permanently closed.
+
+        Args:
+            park_id: Unique identifier for the parking lot to deregister
+
+        Returns:
+            Response dict with deregistration confirmation
+            Example: {"parkId": "lot-01", "status": "deregistered"}
+
+        Raises:
+            httpx.HTTPStatusError: If deregistration fails (e.g., lot not found)
+        """
+        url = f"{self.base_url}/api/parking-lots/{park_id}"
+
+        logger.info(f"Deregistering parking lot {park_id}")
+
+        response = await self.client.delete(url)
+        response.raise_for_status()
+
+        result = response.json()
+        logger.info(f"Parking lot {park_id} deregistered successfully: {result}")
+        return result
+
 
 
 

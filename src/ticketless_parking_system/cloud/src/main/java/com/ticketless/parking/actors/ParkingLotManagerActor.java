@@ -46,6 +46,7 @@ public class ParkingLotManagerActor extends AbstractActor {
     public Receive createReceive() {
         return receiveBuilder()
                 .match(RegisterParkMessage.class, this::handleRegisterPark)
+                .match(DeregisterParkMessage.class, this::handleDeregisterPark)
                 .match(GetRegisteredParksMessage.class, this::handleGetRegisteredParks)
                 .match(ParkingLotOccupancyMessage.class, this::handleOccupancyUpdate)
                 .match(GetParkingLotStatusMessage.class, this::handleGetStatus)
@@ -119,6 +120,33 @@ public class ParkingLotManagerActor extends AbstractActor {
             log.warning("Parking lot {} not found for status query", parkId);
             sender().tell(new ParkingLotStatusMessage(parkId, 0, 0, false), self());
         }
+    }
+
+    /**
+     * Handles deregistration of a parking lot.
+     * Stops the ParkingLotActor and removes it from the registry.
+     */
+    private void handleDeregisterPark(DeregisterParkMessage message) {
+        String parkId = message.getParkId();
+
+        if (!parkActors.containsKey(parkId)) {
+            log.warning("Cannot deregister parking lot {} - not found", parkId);
+            sender().tell(new ParkDeregisteredMessage(parkId), self());
+            return;
+        }
+
+        // Stop the actor
+        ActorRef parkActor = parkActors.get(parkId);
+        getContext().stop(parkActor);
+
+        // Remove from registry
+        parkActors.remove(parkId);
+        parkCapacities.remove(parkId);
+
+        log.info("Deregistered parking lot {}", parkId);
+
+        // Send confirmation
+        sender().tell(new ParkDeregisteredMessage(parkId), self());
     }
 
     @Override

@@ -99,7 +99,10 @@ public class ParkingHttpServer {
                             )
                         )
                     )),
-                    path(segment(), parkId -> get(() -> getParkingLotStatus(parkId)))
+                    path(segment(), parkId -> concat(
+                        get(() -> getParkingLotStatus(parkId)),
+                        delete(() -> deregisterParkingLot(parkId))
+                    ))
                 ))
             ))
         );
@@ -235,6 +238,32 @@ public class ParkingHttpServer {
         });
     }
 
+    /**
+     * Deregister a parking lot.
+     * DELETE /api/parking-lots/{parkId}
+     */
+    private Route deregisterParkingLot(String parkId) {
+        logger.info("HTTP: Deregistering parking lot {}", parkId);
+
+        DeregisterParkMessage message = new DeregisterParkMessage(parkId);
+        CompletionStage<Object> response = Patterns.ask(parkingLotManager, message, ASK_TIMEOUT);
+
+        return onSuccess(response, obj -> {
+            if (obj instanceof ParkDeregisteredMessage) {
+                ParkDeregisteredMessage deregistered = (ParkDeregisteredMessage) obj;
+                String json = gson.toJson(new DeregisterParkResponse(
+                        deregistered.getParkId(),
+                        "deregistered"
+                ));
+                return complete(HttpResponse.create()
+                        .withStatus(StatusCodes.OK)
+                        .withEntity(ContentTypes.APPLICATION_JSON, json));
+            } else {
+                return complete(StatusCodes.NOT_FOUND, "Parking lot not found");
+            }
+        });
+    }
+
     // DTOs for HTTP requests/responses
     public static class RegisterParkRequest {
         public String parkId;
@@ -291,5 +320,14 @@ public class ParkingHttpServer {
             this.parks = parks;
         }
     }
-}
 
+    public static class DeregisterParkResponse {
+        public String parkId;
+        public String status;
+
+        public DeregisterParkResponse(String parkId, String status) {
+            this.parkId = parkId;
+            this.status = status;
+        }
+    }
+}

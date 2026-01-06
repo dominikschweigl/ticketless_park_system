@@ -73,6 +73,20 @@ async def test_basic_client():
         if 'test-lot-01' in parks['parks']:
             print(f"   ✓ test-lot-01 found with capacity {parks['parks']['test-lot-01']}")
 
+        # 8. Deregister parking lot
+        print("\n8. Deregister Parking Lot...")
+        result = await client.deregister_parking_lot("test-lot-01")
+        print(f"   ✓ Deregistered: {result}")
+
+        # 9. Verify it's gone
+        print("\n9. Verify Deregistration...")
+        parks = await client.get_registered_parking_lots()
+        if 'test-lot-01' not in parks['parks']:
+            print("   ✓ test-lot-01 successfully removed from registry")
+        else:
+            print("   ✗ test-lot-01 still in registry!")
+            return False
+
         print("\n" + "=" * 60)
         print("✓ All basic client tests passed!")
         print("=" * 60)
