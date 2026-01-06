@@ -79,15 +79,6 @@ public class ParkingHttpServer {
         return concat(
             path("health", this::healthCheck),
             pathPrefix("api", () -> concat(
-                path("parking-lots", () ->
-                    post(() ->
-                        extractRequestEntity(entity ->
-                            onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem),
-                                strictEntity -> registerParkingLot(strictEntity.getData().utf8String())
-                            )
-                        )
-                    )
-                ),
                 path("occupancy", () ->
                     post(() ->
                         extractRequestEntity(entity ->
@@ -97,9 +88,19 @@ public class ParkingHttpServer {
                         )
                     )
                 ),
-                pathPrefix("parking-lots", () ->
+                pathPrefix("parking-lots", () -> concat(
+                    pathEnd(() -> concat(
+                        get(() -> getRegisteredParkingLots()),
+                        post(() ->
+                            extractRequestEntity(entity ->
+                                onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem),
+                                    strictEntity -> registerParkingLot(strictEntity.getData().utf8String())
+                                )
+                            )
+                        )
+                    )),
                     path(segment(), parkId -> get(() -> getParkingLotStatus(parkId)))
-                )
+                ))
             ))
         );
     }
@@ -111,6 +112,29 @@ public class ParkingHttpServer {
         return complete(HttpResponse.create()
                 .withStatus(StatusCodes.OK)
                 .withEntity(ContentTypes.APPLICATION_JSON, "{\"status\":\"healthy\"}"));
+    }
+
+    /**
+     * Get all registered parking lots.
+     * GET /api/parking-lots
+     */
+    private Route getRegisteredParkingLots() {
+        logger.debug("HTTP: Getting all registered parking lots");
+
+        GetRegisteredParksMessage message = new GetRegisteredParksMessage();
+        CompletionStage<Object> response = Patterns.ask(parkingLotManager, message, ASK_TIMEOUT);
+
+        return onSuccess(response, obj -> {
+            if (obj instanceof RegisteredParksListMessage) {
+                RegisteredParksListMessage parksListMessage = (RegisteredParksListMessage) obj;
+                String json = gson.toJson(new RegisteredParksResponse(parksListMessage.getParks()));
+                return complete(HttpResponse.create()
+                        .withStatus(StatusCodes.OK)
+                        .withEntity(ContentTypes.APPLICATION_JSON, json));
+            } else {
+                return complete(StatusCodes.INTERNAL_SERVER_ERROR, "Unexpected response");
+            }
+        });
     }
 
     /**
@@ -257,6 +281,14 @@ public class ParkingHttpServer {
             this.currentOccupancy = currentOccupancy;
             this.maxCapacity = maxCapacity;
             this.availableSpaces = availableSpaces;
+        }
+    }
+
+    public static class RegisteredParksResponse {
+        public java.util.Map<String, Integer> parks;
+
+        public RegisteredParksResponse(java.util.Map<String, Integer> parks) {
+            this.parks = parks;
         }
     }
 }

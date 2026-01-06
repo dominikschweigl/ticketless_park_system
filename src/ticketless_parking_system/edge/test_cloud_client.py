@@ -66,6 +66,13 @@ async def test_basic_client():
         print(f"   ✓ Current Occupancy: {status['currentOccupancy']}")
         print(f"   ✓ Available Spaces: {status['availableSpaces']}")
 
+        # 7. Get all registered parking lots
+        print("\n7. Get All Registered Parking Lots...")
+        parks = await client.get_registered_parking_lots()
+        print(f"   ✓ Registered parks: {parks['parks']}")
+        if 'test-lot-01' in parks['parks']:
+            print(f"   ✓ test-lot-01 found with capacity {parks['parks']['test-lot-01']}")
+
         print("\n" + "=" * 60)
         print("✓ All basic client tests passed!")
         print("=" * 60)

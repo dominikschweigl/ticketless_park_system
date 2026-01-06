@@ -89,7 +89,7 @@ public class ParkingSystemApp {
      */
     public void getRegisteredLots() {
         parkingLotManager.tell(
-                GetRegisteredParksMessage.INSTANCE,
+                new GetRegisteredParksMessage(),
                 ActorRef.noSender()
         );
     }

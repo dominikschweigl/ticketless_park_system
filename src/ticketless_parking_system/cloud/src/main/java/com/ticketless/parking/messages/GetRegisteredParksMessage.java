@@ -7,11 +7,6 @@ package com.ticketless.parking.messages;
 public class GetRegisteredParksMessage extends ParkingLotMessage {
     private static final long serialVersionUID = 1L;
 
-    public static final GetRegisteredParksMessage INSTANCE = new GetRegisteredParksMessage();
-
-    private GetRegisteredParksMessage() {
-    }
-
     @Override
     public String toString() {
         return "GetRegisteredParksMessage{}";

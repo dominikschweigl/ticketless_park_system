@@ -141,6 +141,25 @@ class CloudParkingClient:
 
         return response.json()
 
+    async def get_registered_parking_lots(self) -> Dict[str, Any]:
+        """
+        Get all registered parking lots from the cloud system.
+
+        Returns:
+            Dict with:
+                - parks: Dictionary mapping parkId (str) to maxCapacity (int)
+                  Example: {"lot-01": 50, "lot-02": 100, "lot-03": 25}
+
+        Raises:
+            httpx.HTTPStatusError: If query fails
+        """
+        url = f"{self.base_url}/api/parking-lots"
+
+        response = await self.client.get(url)
+        response.raise_for_status()
+
+        return response.json()
+
 
 
 

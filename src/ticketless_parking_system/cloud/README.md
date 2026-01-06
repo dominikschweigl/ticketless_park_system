@@ -101,6 +101,9 @@ Test the HTTP API:
 # Health check
 curl http://localhost:8080/health
 
+# Get all registered parking lots
+curl http://localhost:8080/api/parking-lots
+
 # Register parking lot
 curl -X POST http://localhost:8080/api/parking-lots \
   -H "Content-Type: application/json" \
@@ -188,9 +191,10 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/parking-system:late
 | Method | Endpoint | Beschreibung |
 |--------|----------|--------------|
 | GET | `/health` | Health Check |
+| GET | `/api/parking-lots` | Alle registrierten Parkplätze abrufen |
 | POST | `/api/parking-lots` | Parking Lot registrieren |
 | POST | `/api/occupancy` | Occupancy Update senden |
-| GET | `/api/parking-lots/{id}` | Status abfragen |
+| GET | `/api/parking-lots/{id}` | Status eines spezifischen Parkplatzes abfragen |
 
 ## Core Components
 
