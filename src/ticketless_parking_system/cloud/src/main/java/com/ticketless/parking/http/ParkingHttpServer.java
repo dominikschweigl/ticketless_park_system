@@ -1,15 +1,17 @@
 package com.ticketless.parking.http;
 
-import akka.actor.ActorRef;
-import akka.actor.ActorSystem;
+import akka.actor.typed.ActorRef;
+import akka.actor.typed.ActorSystem;
+import akka.actor.typed.Scheduler;
+import akka.actor.typed.javadsl.AskPattern;
 import akka.http.javadsl.Http;
 import akka.http.javadsl.ServerBinding;
 import akka.http.javadsl.model.ContentTypes;
 import akka.http.javadsl.model.HttpResponse;
 import akka.http.javadsl.model.StatusCodes;
 import akka.http.javadsl.server.Route;
-import akka.pattern.Patterns;
 import com.google.gson.Gson;
+import com.ticketless.parking.actors.ParkingLotManagerActor;
 import com.ticketless.parking.messages.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,23 +24,21 @@ import static akka.http.javadsl.server.PathMatchers.segment;
 
 /**
  * HTTP Server for the Parking System to enable communication with Python edge servers.
- * Provides REST API endpoints for:
- * - Registering parking lots
- * - Sending occupancy updates
- * - Querying parking lot status
  */
 public class ParkingHttpServer {
     private static final Logger logger = LoggerFactory.getLogger(ParkingHttpServer.class);
     private static final Duration ASK_TIMEOUT = Duration.ofSeconds(5);
     private static final long ENTITY_TIMEOUT_MS = 5000;
 
-    private final ActorSystem actorSystem;
-    private final ActorRef parkingLotManager;
+    private final ActorSystem<?> actorSystem;
+    private final Scheduler scheduler;
+    private final ActorRef<ParkingLotManagerActor.Command> parkingLotManager;
     private final Gson gson;
     private CompletionStage<ServerBinding> binding;
 
-    public ParkingHttpServer(ActorSystem actorSystem, ActorRef parkingLotManager) {
+    public ParkingHttpServer(ActorSystem<?> actorSystem, ActorRef<ParkingLotManagerActor.Command> parkingLotManager) {
         this.actorSystem = actorSystem;
+        this.scheduler = actorSystem.scheduler();
         this.parkingLotManager = parkingLotManager;
         this.gson = new Gson();
     }
@@ -90,7 +90,7 @@ public class ParkingHttpServer {
                 ),
                 pathPrefix("parking-lots", () -> concat(
                     pathEnd(() -> concat(
-                        get(() -> getRegisteredParkingLots()),
+                        get(this::getRegisteredParkingLots),
                         post(() ->
                             extractRequestEntity(entity ->
                                 onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem),
@@ -124,19 +124,18 @@ public class ParkingHttpServer {
     private Route getRegisteredParkingLots() {
         logger.debug("HTTP: Getting all registered parking lots");
 
-        GetRegisteredParksMessage message = new GetRegisteredParksMessage();
-        CompletionStage<Object> response = Patterns.ask(parkingLotManager, message, ASK_TIMEOUT);
+        CompletionStage<RegisteredParksListMessage> response = AskPattern.ask(
+                parkingLotManager,
+                (ActorRef<RegisteredParksListMessage> replyTo) -> new ParkingLotManagerActor.GetRegistered(replyTo),
+                ASK_TIMEOUT,
+                scheduler
+        );
 
-        return onSuccess(response, obj -> {
-            if (obj instanceof RegisteredParksListMessage) {
-                RegisteredParksListMessage parksListMessage = (RegisteredParksListMessage) obj;
-                String json = gson.toJson(new RegisteredParksResponse(parksListMessage.getParks()));
-                return complete(HttpResponse.create()
-                        .withStatus(StatusCodes.OK)
-                        .withEntity(ContentTypes.APPLICATION_JSON, json));
-            } else {
-                return complete(StatusCodes.INTERNAL_SERVER_ERROR, "Unexpected response");
-            }
+        return onSuccess(response, parksListMessage -> {
+            String json = gson.toJson(new RegisteredParksResponse(parksListMessage.getParks()));
+            return complete(HttpResponse.create()
+                    .withStatus(StatusCodes.OK)
+                    .withEntity(ContentTypes.APPLICATION_JSON, json));
         });
     }
 
@@ -152,27 +151,26 @@ public class ParkingHttpServer {
             logger.info("HTTP: Registering parking lot {} (capacity: {})",
                     request.parkId, request.maxCapacity);
 
-            RegisterParkMessage message = new RegisterParkMessage(
-                    request.parkId,
-                    request.maxCapacity
+            CompletionStage<ParkRegisteredMessage> response = AskPattern.ask(
+                    parkingLotManager,
+                    (ActorRef<ParkRegisteredMessage> replyTo) -> new ParkingLotManagerActor.RegisterLot(
+                            request.parkId,
+                            request.maxCapacity,
+                            replyTo
+                    ),
+                    ASK_TIMEOUT,
+                    scheduler
             );
 
-            CompletionStage<Object> response = Patterns.ask(parkingLotManager, message, ASK_TIMEOUT);
-
-            return onSuccess(response, obj -> {
-                if (obj instanceof ParkRegisteredMessage) {
-                    ParkRegisteredMessage registered = (ParkRegisteredMessage) obj;
-                    String json = gson.toJson(new RegisterParkResponse(
-                            registered.getParkId(),
-                            registered.getMaxCapacity(),
-                            "registered"
-                    ));
-                    return complete(HttpResponse.create()
-                            .withStatus(StatusCodes.CREATED)
-                            .withEntity(ContentTypes.APPLICATION_JSON, json));
-                } else {
-                    return complete(StatusCodes.INTERNAL_SERVER_ERROR, "Unexpected response");
-                }
+            return onSuccess(response, registered -> {
+                String json = gson.toJson(new RegisterParkResponse(
+                        registered.getParkId(),
+                        registered.getMaxCapacity(),
+                        "registered"
+                ));
+                return complete(HttpResponse.create()
+                        .withStatus(StatusCodes.CREATED)
+                        .withEntity(ContentTypes.APPLICATION_JSON, json));
             });
         } catch (Exception e) {
             logger.error("Error parsing register request", e);
@@ -192,13 +190,11 @@ public class ParkingHttpServer {
             logger.debug("HTTP: Occupancy update for {} - {} cars",
                     request.parkId, request.currentOccupancy);
 
-            ParkingLotOccupancyMessage message = new ParkingLotOccupancyMessage(
+            parkingLotManager.tell(new ParkingLotManagerActor.UpdateOccupancy(
                     request.parkId,
                     request.currentOccupancy,
                     System.currentTimeMillis()
-            );
-
-            parkingLotManager.tell(message, ActorRef.noSender());
+            ));
 
             String json = gson.toJson(new OccupancyUpdateResponse("accepted", request.parkId, request.currentOccupancy));
             return complete(HttpResponse.create()
@@ -217,24 +213,23 @@ public class ParkingHttpServer {
     private Route getParkingLotStatus(String parkId) {
         logger.debug("HTTP: Getting status for parking lot {}", parkId);
 
-        GetParkingLotStatusMessage message = new GetParkingLotStatusMessage(parkId);
-        CompletionStage<Object> response = Patterns.ask(parkingLotManager, message, ASK_TIMEOUT);
+        CompletionStage<ParkingLotStatusMessage> response = AskPattern.ask(
+                parkingLotManager,
+                (ActorRef<ParkingLotStatusMessage> replyTo) -> new ParkingLotManagerActor.GetStatus(parkId, replyTo),
+                ASK_TIMEOUT,
+                scheduler
+        );
 
-        return onSuccess(response, obj -> {
-            if (obj instanceof ParkingLotStatusMessage) {
-                ParkingLotStatusMessage status = (ParkingLotStatusMessage) obj;
-                String json = gson.toJson(new ParkingLotStatusResponse(
-                        status.getParkId(),
-                        status.getCurrentOccupancy(),
-                        status.getMaxCapacity(),
-                        status.getAvailableSpaces()
-                ));
-                return complete(HttpResponse.create()
-                        .withStatus(StatusCodes.OK)
-                        .withEntity(ContentTypes.APPLICATION_JSON, json));
-            } else {
-                return complete(StatusCodes.NOT_FOUND, "Parking lot not found");
-            }
+        return onSuccess(response, status -> {
+            String json = gson.toJson(new ParkingLotStatusResponse(
+                    status.getParkId(),
+                    status.getCurrentOccupancy(),
+                    status.getMaxCapacity(),
+                    status.getAvailableSpaces()
+            ));
+            return complete(HttpResponse.create()
+                    .withStatus(StatusCodes.OK)
+                    .withEntity(ContentTypes.APPLICATION_JSON, json));
         });
     }
 
@@ -245,89 +240,30 @@ public class ParkingHttpServer {
     private Route deregisterParkingLot(String parkId) {
         logger.info("HTTP: Deregistering parking lot {}", parkId);
 
-        DeregisterParkMessage message = new DeregisterParkMessage(parkId);
-        CompletionStage<Object> response = Patterns.ask(parkingLotManager, message, ASK_TIMEOUT);
+        CompletionStage<ParkDeregisteredMessage> response = AskPattern.ask(
+                parkingLotManager,
+                (ActorRef<ParkDeregisteredMessage> replyTo) -> new ParkingLotManagerActor.DeregisterLot(parkId, replyTo),
+                ASK_TIMEOUT,
+                scheduler
+        );
 
-        return onSuccess(response, obj -> {
-            if (obj instanceof ParkDeregisteredMessage) {
-                ParkDeregisteredMessage deregistered = (ParkDeregisteredMessage) obj;
-                String json = gson.toJson(new DeregisterParkResponse(
-                        deregistered.getParkId(),
-                        "deregistered"
-                ));
-                return complete(HttpResponse.create()
-                        .withStatus(StatusCodes.OK)
-                        .withEntity(ContentTypes.APPLICATION_JSON, json));
-            } else {
-                return complete(StatusCodes.NOT_FOUND, "Parking lot not found");
-            }
+        return onSuccess(response, deregistered -> {
+            String json = gson.toJson(new DeregisterParkResponse(
+                    deregistered.getParkId(),
+                    "deregistered"
+            ));
+            return complete(HttpResponse.create()
+                    .withStatus(StatusCodes.OK)
+                    .withEntity(ContentTypes.APPLICATION_JSON, json));
         });
     }
 
     // DTOs for HTTP requests/responses
-    public static class RegisterParkRequest {
-        public String parkId;
-        public int maxCapacity;
-    }
-
-    public static class RegisterParkResponse {
-        public String parkId;
-        public int maxCapacity;
-        public String status;
-
-        public RegisterParkResponse(String parkId, int maxCapacity, String status) {
-            this.parkId = parkId;
-            this.maxCapacity = maxCapacity;
-            this.status = status;
-        }
-    }
-
-    public static class OccupancyUpdateRequest {
-        public String parkId;
-        public int currentOccupancy;
-    }
-
-    public static class OccupancyUpdateResponse {
-        public String status;
-        public String parkId;
-        public int currentOccupancy;
-
-        public OccupancyUpdateResponse(String status, String parkId, int currentOccupancy) {
-            this.status = status;
-            this.parkId = parkId;
-            this.currentOccupancy = currentOccupancy;
-        }
-    }
-
-    public static class ParkingLotStatusResponse {
-        public String parkId;
-        public int currentOccupancy;
-        public int maxCapacity;
-        public int availableSpaces;
-
-        public ParkingLotStatusResponse(String parkId, int currentOccupancy, int maxCapacity, int availableSpaces) {
-            this.parkId = parkId;
-            this.currentOccupancy = currentOccupancy;
-            this.maxCapacity = maxCapacity;
-            this.availableSpaces = availableSpaces;
-        }
-    }
-
-    public static class RegisteredParksResponse {
-        public java.util.Map<String, Integer> parks;
-
-        public RegisteredParksResponse(java.util.Map<String, Integer> parks) {
-            this.parks = parks;
-        }
-    }
-
-    public static class DeregisterParkResponse {
-        public String parkId;
-        public String status;
-
-        public DeregisterParkResponse(String parkId, String status) {
-            this.parkId = parkId;
-            this.status = status;
-        }
-    }
+    public static class RegisterParkRequest { public String parkId; public int maxCapacity; }
+    public static class RegisterParkResponse { public String parkId; public int maxCapacity; public String status; public RegisterParkResponse(String parkId, int maxCapacity, String status) { this.parkId = parkId; this.maxCapacity = maxCapacity; this.status = status; } }
+    public static class OccupancyUpdateRequest { public String parkId; public int currentOccupancy; }
+    public static class OccupancyUpdateResponse { public String status; public String parkId; public int currentOccupancy; public OccupancyUpdateResponse(String status, String parkId, int currentOccupancy) { this.status = status; this.parkId = parkId; this.currentOccupancy = currentOccupancy; } }
+    public static class ParkingLotStatusResponse { public String parkId; public int currentOccupancy; public int maxCapacity; public int availableSpaces; public ParkingLotStatusResponse(String parkId, int currentOccupancy, int maxCapacity, int availableSpaces) { this.parkId = parkId; this.currentOccupancy = currentOccupancy; this.maxCapacity = maxCapacity; this.availableSpaces = availableSpaces; } }
+    public static class RegisteredParksResponse { public java.util.Map<String, Integer> parks; public RegisteredParksResponse(java.util.Map<String, Integer> parks) { this.parks = parks; } }
+    public static class DeregisterParkResponse { public String parkId; public String status; public DeregisterParkResponse(String parkId, String status) { this.parkId = parkId; this.status = status; } }
 }

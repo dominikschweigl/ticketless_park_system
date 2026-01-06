@@ -1,157 +1,176 @@
 package com.ticketless.parking.actors;
 
-import akka.actor.AbstractActor;
-import akka.actor.ActorRef;
-import akka.actor.Props;
-import akka.event.Logging;
-import akka.event.LoggingAdapter;
+import akka.actor.typed.Behavior;
+import akka.actor.typed.ActorRef;
+import akka.actor.typed.javadsl.Behaviors;
+import akka.actor.typed.javadsl.ActorContext;
+import akka.actor.typed.javadsl.Receive;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.ticketless.parking.messages.*;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * ParkingLotManagerActor supervises all ParkingLotActors.
- * 
- * Responsibilities:
- * - Register new parking lots dynamically (from edge servers)
- * - Maintain registry of all active parking lots
- * - Route occupancy messages to appropriate ParkingLotActors
- * - Provide list of registered parks
- * 
- * This allows edge servers to:
- * 1. Discover existing parking lots via GetRegisteredParksMessage
- * 2. Create new parking lots via RegisterParkMessage
- * 3. Send occupancy updates to specific parking lots via OccupancyMessage
+ * Akka Typed ParkingLotManagerActor supervises all ParkingLotActors.
  */
-public class ParkingLotManagerActor extends AbstractActor {
-    private final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
+public class ParkingLotManagerActor {
 
-    // Map of parkId -> ParkingLotActor reference
-    private final Map<String, ActorRef> parkActors = new HashMap<>();
-    // Map of parkId -> max capacity
-    private final Map<String, Integer> parkCapacities = new HashMap<>();
+    // Protocol
+    public interface Command {}
 
-    public static Props props() {
-        return Props.create(ParkingLotManagerActor.class);
-    }
-
-    @Override
-    public void preStart() throws Exception {
-        super.preStart();
-        log.info("ParkingLotManagerActor started");
-    }
-
-    @Override
-    public Receive createReceive() {
-        return receiveBuilder()
-                .match(RegisterParkMessage.class, this::handleRegisterPark)
-                .match(DeregisterParkMessage.class, this::handleDeregisterPark)
-                .match(GetRegisteredParksMessage.class, this::handleGetRegisteredParks)
-                .match(ParkingLotOccupancyMessage.class, this::handleOccupancyUpdate)
-                .match(GetParkingLotStatusMessage.class, this::handleGetStatus)
-                .matchAny(this::unhandled)
-                .build();
-    }
-
-    /**
-     * Handles registration of a new parking lot.
-     * Creates a new ParkingLotActor if it doesn't already exist.
-     */
-    private void handleRegisterPark(RegisterParkMessage message) {
-        String parkId = message.getParkId();
-
-        if (parkActors.containsKey(parkId)) {
-            log.warning("Parking lot {} already registered", parkId);
-            sender().tell(new ParkRegisteredMessage(parkId, parkCapacities.get(parkId), parkActors.get(parkId)), self());
-            return;
-        }
-
-        // Create new ParkingLotActor
-        ActorRef parkActor = getContext().actorOf(
-                ParkingLotActor.props(parkId, message.getMaxCapacity()),
-                "park-" + parkId
-        );
-
-        parkActors.put(parkId, parkActor);
-        parkCapacities.put(parkId, message.getMaxCapacity());
-
-        log.info("Registered parking lot {} (capacity: {})",
-                parkId, message.getMaxCapacity());
-
-        // Send confirmation back to the edge server
-        sender().tell(new ParkRegisteredMessage(parkId, message.getMaxCapacity(), parkActor), self());
-    }
-
-    /**
-     * Handles request for list of registered parking lots.
-     * Edge servers use this to discover existing parking lots.
-     */
-    private void handleGetRegisteredParks(GetRegisteredParksMessage message) {
-        RegisteredParksListMessage response = new RegisteredParksListMessage(parkCapacities);
-        log.debug("Returning list of {} registered parks", parkCapacities.size());
-        sender().tell(response, self());
-    }
-
-    /**
-     * Routes occupancy update messages to the appropriate parking lot.
-     * Edge servers send this with the current occupancy count.
-     */
-    private void handleOccupancyUpdate(ParkingLotOccupancyMessage message) {
-        String parkId = message.getParkId();
-        ActorRef parkActor = parkActors.get(parkId);
-        if (parkActor != null) {
-            parkActor.tell(message, sender());
-        } else {
-            log.warning("Parking lot {} not found for occupancy update", parkId);
+    public static final class RegisterLot implements Command {
+        public final String parkId;
+        public final int maxCapacity;
+        public final ActorRef<ParkRegisteredMessage> replyTo;
+        public RegisterLot(String parkId, int maxCapacity, ActorRef<ParkRegisteredMessage> replyTo) {
+            this.parkId = parkId;
+            this.maxCapacity = maxCapacity;
+            this.replyTo = replyTo;
         }
     }
 
-    /**
-     * Routes status queries to the appropriate parking lot.
-     */
-    private void handleGetStatus(GetParkingLotStatusMessage message) {
-        String parkId = message.getParkId();
-        ActorRef parkActor = parkActors.get(parkId);
-
-        if (parkActor != null) {
-            parkActor.forward(message, getContext());
-        } else {
-            log.warning("Parking lot {} not found for status query", parkId);
-            sender().tell(new ParkingLotStatusMessage(parkId, 0, 0, false), self());
+    public static final class RegisterLotNoReply implements Command {
+        public final String parkId;
+        public final int maxCapacity;
+        public RegisterLotNoReply(String parkId, int maxCapacity) {
+            this.parkId = parkId;
+            this.maxCapacity = maxCapacity;
         }
     }
 
-    /**
-     * Handles deregistration of a parking lot.
-     * Stops the ParkingLotActor and removes it from the registry.
-     */
-    private void handleDeregisterPark(DeregisterParkMessage message) {
-        String parkId = message.getParkId();
-
-        if (!parkActors.containsKey(parkId)) {
-            log.warning("Cannot deregister parking lot {} - not found", parkId);
-            sender().tell(new ParkDeregisteredMessage(parkId), self());
-            return;
+    public static final class DeregisterLot implements Command {
+        public final String parkId;
+        public final ActorRef<ParkDeregisteredMessage> replyTo;
+        public DeregisterLot(String parkId, ActorRef<ParkDeregisteredMessage> replyTo) {
+            this.parkId = parkId;
+            this.replyTo = replyTo;
         }
-
-        // Stop the actor
-        ActorRef parkActor = parkActors.get(parkId);
-        getContext().stop(parkActor);
-
-        // Remove from registry
-        parkActors.remove(parkId);
-        parkCapacities.remove(parkId);
-
-        log.info("Deregistered parking lot {}", parkId);
-
-        // Send confirmation
-        sender().tell(new ParkDeregisteredMessage(parkId), self());
     }
 
-    @Override
-    public void unhandled(Object message) {
-        log.warning("Received unhandled message: {}", message);
-        super.unhandled(message);
+    public static final class UpdateOccupancy implements Command {
+        public final String parkId;
+        public final int currentOccupancy;
+        public final long timestamp;
+        public UpdateOccupancy(String parkId, int currentOccupancy, long timestamp) {
+            this.parkId = parkId;
+            this.currentOccupancy = currentOccupancy;
+            this.timestamp = timestamp;
+        }
+    }
+
+    public static final class GetStatus implements Command {
+        public final String parkId;
+        public final ActorRef<ParkingLotStatusMessage> replyTo;
+        public GetStatus(String parkId, ActorRef<ParkingLotStatusMessage> replyTo) {
+            this.parkId = parkId;
+            this.replyTo = replyTo;
+        }
+    }
+
+    public static final class GetRegistered implements Command {
+        public final ActorRef<RegisteredParksListMessage> replyTo;
+        public GetRegistered(ActorRef<RegisteredParksListMessage> replyTo) {
+            this.replyTo = replyTo;
+        }
+    }
+
+    // Factory
+    public static Behavior<Command> create() {
+        return Behaviors.setup(ctx -> new ManagerBehavior(ctx).behavior());
+    }
+
+    // Internal behavior implementation
+    private static class ManagerBehavior {
+        private final ActorContext<Command> ctx;
+        private final Logger log = LoggerFactory.getLogger(ParkingLotManagerActor.class);
+        private final Map<String, ActorRef<ParkingLotActor.Command>> parkActors = new HashMap<>();
+        private final Map<String, Integer> parkCapacities = new HashMap<>();
+
+        ManagerBehavior(ActorContext<Command> ctx) {
+            this.ctx = ctx;
+            log.info("ParkingLotManagerActor started");
+        }
+
+        Behavior<Command> behavior() {
+            return Behaviors.receive(Command.class)
+                    .onMessage(RegisterLot.class, this::onRegisterLot)
+                    .onMessage(RegisterLotNoReply.class, this::onRegisterLotNoReply)
+                    .onMessage(DeregisterLot.class, this::onDeregisterLot)
+                    .onMessage(UpdateOccupancy.class, this::onUpdateOccupancy)
+                    .onMessage(GetStatus.class, this::onGetStatus)
+                    .onMessage(GetRegistered.class, this::onGetRegistered)
+                    .build();
+        }
+
+        private Behavior<Command> onRegisterLot(RegisterLot msg) {
+            String parkId = msg.parkId;
+            if (parkActors.containsKey(parkId)) {
+                log.warn("Parking lot {} already registered", parkId);
+                msg.replyTo.tell(new ParkRegisteredMessage(parkId, parkCapacities.get(parkId)));
+                return Behaviors.same();
+            }
+            ActorRef<ParkingLotActor.Command> child = ctx.spawn(ParkingLotActor.create(parkId, msg.maxCapacity), "park-" + parkId);
+            parkActors.put(parkId, child);
+            parkCapacities.put(parkId, msg.maxCapacity);
+            log.info("Registered parking lot {} (capacity: {})", parkId, msg.maxCapacity);
+            msg.replyTo.tell(new ParkRegisteredMessage(parkId, msg.maxCapacity));
+            return Behaviors.same();
+        }
+
+        private Behavior<Command> onRegisterLotNoReply(RegisterLotNoReply msg) {
+            String parkId = msg.parkId;
+            if (parkActors.containsKey(parkId)) {
+                log.warn("Parking lot {} already registered", parkId);
+                return Behaviors.same();
+            }
+            ActorRef<ParkingLotActor.Command> child = ctx.spawn(ParkingLotActor.create(parkId, msg.maxCapacity), "park-" + parkId);
+            parkActors.put(parkId, child);
+            parkCapacities.put(parkId, msg.maxCapacity);
+            log.info("Registered parking lot {} (capacity: {})", parkId, msg.maxCapacity);
+            return Behaviors.same();
+        }
+
+        private Behavior<Command> onDeregisterLot(DeregisterLot msg) {
+            String parkId = msg.parkId;
+            ActorRef<ParkingLotActor.Command> child = parkActors.remove(parkId);
+            if (child == null) {
+                log.warn("Cannot deregister parking lot {} - not found", parkId);
+                msg.replyTo.tell(new ParkDeregisteredMessage(parkId));
+                return Behaviors.same();
+            }
+            parkCapacities.remove(parkId);
+            ctx.stop(child);
+            log.info("Deregistered parking lot {}", parkId);
+            msg.replyTo.tell(new ParkDeregisteredMessage(parkId));
+            return Behaviors.same();
+        }
+
+        private Behavior<Command> onUpdateOccupancy(UpdateOccupancy msg) {
+            ActorRef<ParkingLotActor.Command> child = parkActors.get(msg.parkId);
+            if (child != null) {
+                child.tell(new ParkingLotActor.UpdateOccupancy(msg.currentOccupancy, msg.timestamp));
+            } else {
+                log.warn("Parking lot {} not found for occupancy update", msg.parkId);
+            }
+            return Behaviors.same();
+        }
+
+        private Behavior<Command> onGetStatus(GetStatus msg) {
+            ActorRef<ParkingLotActor.Command> child = parkActors.get(msg.parkId);
+            if (child != null) {
+                child.tell(new ParkingLotActor.GetStatus(msg.replyTo));
+            } else {
+                log.warn("Parking lot {} not found for status query", msg.parkId);
+                msg.replyTo.tell(new ParkingLotStatusMessage(msg.parkId, 0, 0, false));
+            }
+            return Behaviors.same();
+        }
+
+        private Behavior<Command> onGetRegistered(GetRegistered msg) {
+            msg.replyTo.tell(new RegisteredParksListMessage(parkCapacities));
+            return Behaviors.same();
+        }
     }
 }

@@ -1,115 +1,86 @@
 package com.ticketless.parking.actors;
 
-import akka.actor.AbstractActor;
-import akka.actor.Props;
-import akka.event.Logging;
-import akka.event.LoggingAdapter;
-import com.ticketless.parking.messages.*;
+import akka.actor.typed.Behavior;
+import akka.actor.typed.javadsl.Behaviors;
+import akka.actor.typed.javadsl.ActorContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.ticketless.parking.messages.ParkingLotStatusMessage;
 
 /**
- * ParkingLotActor manages a single parking lot.
- * Each parking lot has an actor instance that tracks:
- * - Current occupancy (number of cars)
- * - Maximum capacity
- * - Last update timestamp
- * 
- * Messages handled:
- * - OccupancyMessage: Periodic occupancy update from edge server
- * - GetStatusMessage: Request current parking lot status
- * 
- * State Management:
- * - Receives occupancy updates from edge servers (which measure via sensors)
- * - Edge server is the source of truth; cloud mirrors the state
- * - No need for periodic state broadcasts; edge server controls update frequency
+ * Akka Typed ParkingLotActor that manages a single parking lot state.
  */
-public class ParkingLotActor extends AbstractActor {
-    private final LoggingAdapter log = Logging.getLogger(getContext().getSystem(), this);
+public class ParkingLotActor {
 
-    private final String parkId;
-    private final int maxCapacity;
-    private int currentOccupancy;
-    private long lastUpdateTimestamp;
+    // Protocol
+    public interface Command {}
 
-    /**
-     * Creates a new ParkingLotActor instance.
-     *
-     * @param parkId      Unique identifier for this parking lot
-     * @param maxCapacity Maximum number of cars allowed in this parking lot
-     */
-    public ParkingLotActor(String parkId, int maxCapacity) {
-        this.parkId = parkId;
-        this.maxCapacity = maxCapacity;
-        this.currentOccupancy = 0;
-        this.lastUpdateTimestamp = System.currentTimeMillis();
-        log.info("ParkingLotActor initialized for park {} with capacity {}", parkId, maxCapacity);
+    public static final class UpdateOccupancy implements Command {
+        public final int currentOccupancy;
+        public final long timestamp;
+        public UpdateOccupancy(int currentOccupancy, long timestamp) {
+            this.currentOccupancy = currentOccupancy;
+            this.timestamp = timestamp;
+        }
     }
 
-    /**
-     * Factory method to create Props for this actor.
-     * Used with ActorSystem.actorOf(ParkingLotActor.props(...))
-     */
-    public static Props props(String parkId, int maxCapacity) {
-        return Props.create(ParkingLotActor.class, parkId, maxCapacity);
+    public static final class GetStatus implements Command {
+        public final akka.actor.typed.ActorRef<ParkingLotStatusMessage> replyTo;
+        public GetStatus(akka.actor.typed.ActorRef<ParkingLotStatusMessage> replyTo) {
+            this.replyTo = replyTo;
+        }
     }
 
-    @Override
-    public void preStart() throws Exception {
-        super.preStart();
-        log.debug("ParkingLotActor started for park {}", parkId);
+    // Factory
+    public static Behavior<Command> create(String parkId, int maxCapacity) {
+        return Behaviors.setup(ctx -> new ParkingLotBehavior(ctx, parkId, maxCapacity).behavior());
     }
 
-    @Override
-    public void postStop() throws Exception {
-        super.postStop();
-        log.info("ParkingLotActor stopped for park {}", parkId);
-    }
+    // Internal behavior implementation
+    private static class ParkingLotBehavior {
+        private final ActorContext<Command> ctx;
+        private final Logger log = LoggerFactory.getLogger(ParkingLotActor.class);
+        private final String parkId;
+        private final int maxCapacity;
+        private int currentOccupancy;
+        private long lastUpdateTimestamp;
 
-    @Override
-    public Receive createReceive() {
-        return receiveBuilder()
-                .match(ParkingLotOccupancyMessage.class, this::handleOccupancyUpdate)
-                .match(GetParkingLotStatusMessage.class, this::handleGetStatus)
-                .matchAny(this::unhandled)
-                .build();
-    }
-
-    /**
-     * Handles occupancy update from edge server.
-     * Edge servers send this periodically with the current number of cars.
-     */
-    private void handleOccupancyUpdate(ParkingLotOccupancyMessage message) {
-        currentOccupancy = message.getCurrentOccupancy();
-        lastUpdateTimestamp = message.getTimestamp();
-
-        // Validate occupancy doesn't exceed capacity
-        if (currentOccupancy > maxCapacity) {
-            log.warning("Occupancy {} exceeds capacity {} for park {}. ",
-                    currentOccupancy, maxCapacity, parkId);
+        ParkingLotBehavior(ActorContext<Command> ctx, String parkId, int maxCapacity) {
+            this.ctx = ctx;
+            this.parkId = parkId;
+            this.maxCapacity = maxCapacity;
+            this.currentOccupancy = 0;
+            this.lastUpdateTimestamp = System.currentTimeMillis();
+            log.info("ParkingLotActor initialized for park {} with capacity {}", parkId, maxCapacity);
         }
 
-        log.info("Occupancy update for park {}: {}/{} cars",
-                parkId, currentOccupancy, maxCapacity);
-    }
+        Behavior<Command> behavior() {
+            return Behaviors.receive(Command.class)
+                    .onMessage(UpdateOccupancy.class, this::onUpdateOccupancy)
+                    .onMessage(GetStatus.class, this::onGetStatus)
+                    .build();
+        }
 
-    /**
-     * Handles a status query.
-     * Returns a ParkingLotStatusMessage with the current state.
-     */
-    private void handleGetStatus(GetParkingLotStatusMessage message) {
-        boolean isFull = currentOccupancy >= maxCapacity;
-        ParkingLotStatusMessage response = new ParkingLotStatusMessage(
-                parkId,
-                currentOccupancy,
-                maxCapacity,
-                isFull
-        );
-        log.debug("Status requested for park {}. Responding with: {}", parkId, response);
-        sender().tell(response, self());
-    }
+        private Behavior<Command> onUpdateOccupancy(UpdateOccupancy msg) {
+            this.currentOccupancy = msg.currentOccupancy;
+            this.lastUpdateTimestamp = msg.timestamp;
+            if (currentOccupancy > maxCapacity) {
+                log.warn("Occupancy {} exceeds capacity {} for park {}", currentOccupancy, maxCapacity, parkId);
+            }
+            log.info("Occupancy update for park {}: {}/{} cars", parkId, currentOccupancy, maxCapacity);
+            return Behaviors.same();
+        }
 
-    @Override
-    public void unhandled(Object message) {
-        log.warning("Received unhandled message: {}", message);
-        super.unhandled(message);
+        private Behavior<Command> onGetStatus(GetStatus msg) {
+            boolean isFull = currentOccupancy >= maxCapacity;
+            ParkingLotStatusMessage response = new ParkingLotStatusMessage(
+                    parkId,
+                    currentOccupancy,
+                    maxCapacity,
+                    isFull
+            );
+            msg.replyTo.tell(response);
+            return Behaviors.same();
+        }
     }
 }

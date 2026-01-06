@@ -1,7 +1,10 @@
 package com.ticketless.parking.app;
 
-import akka.actor.ActorRef;
-import akka.actor.ActorSystem;
+import akka.actor.typed.ActorSystem;
+import akka.actor.typed.ActorRef;
+import akka.actor.typed.javadsl.AskPattern;
+import scala.concurrent.duration.FiniteDuration;
+import java.time.Duration;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import org.slf4j.Logger;
@@ -15,34 +18,12 @@ import com.ticketless.parking.messages.*;
 
 /**
  * Main entry point for the Ticketless Parking System application.
- * 
- * This application demonstrates a distributed Akka actor-based parking management system.
- * 
- * Architecture:
- * - ParkingLotManagerActor: Supervises all parking lots and handles registration
- * - ParkingLotActor (per parking lot): Manages individual parking lot state
- * - Edge servers register parking lots and send periodic occupancy updates
- * 
- * State Model:
- * - Edge servers are the SOURCE OF TRUTH via sensor measurements
- * - Edge servers periodically send OccupancyMessage with current car count
- * - Cloud system mirrors the state received from edge servers
- * - No need for individual car arrival/departure messages
- * 
- * Benefits of occupancy-based approach:
- * 1. Simple and robust - single source of truth per parking lot
- * 2. Handles sensor errors gracefully
- * 3. No message ordering issues
- * 4. Easy to audit and debug
- * 5. Naturally handles edge server failover (latest occupancy is always accurate)
- * 
- * Can be run on AWS ECS with proper Docker configuration.
  */
 public class ParkingSystemApp {
     private static final Logger logger = LoggerFactory.getLogger(ParkingSystemApp.class);
 
-    private final ActorSystem actorSystem;
-    private final ActorRef parkingLotManager;
+    private final ActorSystem<ParkingLotManagerActor.Command> actorSystem;
+    private final ActorRef<ParkingLotManagerActor.Command> parkingLotManager;
     private final ParkingHttpServer httpServer;
 
     /**
@@ -50,11 +31,8 @@ public class ParkingSystemApp {
      */
     public ParkingSystemApp() {
         Config config = ConfigFactory.load();
-        this.actorSystem = ActorSystem.create("ParkingSystem", config);
-        this.parkingLotManager = actorSystem.actorOf(
-                ParkingLotManagerActor.props(),
-                "parking-lot-manager"
-        );
+        this.actorSystem = ActorSystem.create(ParkingLotManagerActor.create(), "ParkingSystem", config);
+        this.parkingLotManager = actorSystem;
 
         // Initialize HTTP server for Python edge server communication
         this.httpServer = new ParkingHttpServer(actorSystem, parkingLotManager);
@@ -66,7 +44,7 @@ public class ParkingSystemApp {
         // Start HTTP server
         httpServer.start(httpHost, httpPort);
 
-        logger.info("ParkingSystemApp initialized with ActorSystem: {}", actorSystem.name());
+        logger.info("ParkingSystemApp initialized with ActorSystem: {}", actorSystem.path().name());
     }
 
     /**
@@ -77,10 +55,7 @@ public class ParkingSystemApp {
      * @param maxCapacity Maximum capacity of the parking lot
      */
     public void registerParkingLot(String parkId, int maxCapacity) {
-        parkingLotManager.tell(
-                new RegisterParkMessage(parkId, maxCapacity),
-                ActorRef.noSender()
-        );
+        parkingLotManager.tell(new ParkingLotManagerActor.RegisterLotNoReply(parkId, maxCapacity));
     }
 
     /**
@@ -88,10 +63,7 @@ public class ParkingSystemApp {
      * Edge servers use this to discover available lots.
      */
     public void getRegisteredLots() {
-        parkingLotManager.tell(
-                new GetRegisteredParksMessage(),
-                ActorRef.noSender()
-        );
+        // No-op here; HTTP path handles asks
     }
 
     /**
@@ -103,10 +75,7 @@ public class ParkingSystemApp {
      * @param occupancy Current number of cars in the lot (from sensors)
      */
     public void updateOccupancy(String parkId, int occupancy) {
-        parkingLotManager.tell(
-                new ParkingLotOccupancyMessage(parkId, occupancy, System.currentTimeMillis()),
-                ActorRef.noSender()
-        );
+        parkingLotManager.tell(new ParkingLotManagerActor.UpdateOccupancy(parkId, occupancy, System.currentTimeMillis()));
     }
 
     /**
