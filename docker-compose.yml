@@ -18,7 +18,8 @@ services:
     container_name: camera-simulator
     restart: always
     environment:
-      - NATS_URL=nats://nats:4222
+      - EDGE_NATS_URL=nats://nats:4222
+      - CLOUD_NATS_URL=nats://nats:4222
     depends_on:
       - nats
     networks:
