@@ -13,6 +13,7 @@ import akka.http.javadsl.server.Route;
 import com.google.gson.Gson;
 import com.ticketless.parking.actors.ParkingLotManagerActor;
 import com.ticketless.parking.actors.PaymentActor;
+import com.ticketless.parking.actors.BookingActor;
 import com.ticketless.parking.messages.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,14 +36,19 @@ public class ParkingHttpServer {
     private final Scheduler scheduler;
     private final ActorRef<ParkingLotManagerActor.Command> parkingLotManager;
     private final ActorRef<PaymentActor.Command> paymentActor;
+    private final ActorRef<BookingActor.Command> bookingActor;
     private final Gson gson;
     private CompletionStage<ServerBinding> binding;
 
-    public ParkingHttpServer(ActorSystem<?> actorSystem, ActorRef<ParkingLotManagerActor.Command> parkingLotManager, ActorRef<PaymentActor.Command> paymentActor) {
+    public ParkingHttpServer(ActorSystem<?> actorSystem,
+                             ActorRef<ParkingLotManagerActor.Command> parkingLotManager,
+                             ActorRef<PaymentActor.Command> paymentActor,
+                             ActorRef<BookingActor.Command> bookingActor) {
         this.actorSystem = actorSystem;
         this.scheduler = actorSystem.scheduler();
         this.parkingLotManager = parkingLotManager;
         this.paymentActor = paymentActor;
+        this.bookingActor = bookingActor;
         this.gson = new Gson();
     }
 
@@ -106,6 +112,17 @@ public class ParkingHttpServer {
                         get(() -> getParkingLotStatus(parkId)),
                         delete(() -> deregisterParkingLot(parkId))
                     ))
+                )),
+                pathPrefix("bookings", () -> concat(
+                    // Create booking
+                    post(() -> extractRequestEntity(entity -> onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem), strict ->
+                        createBooking(strict.getData().utf8String())
+                    ))
+                    ),
+                    // Cancel booking
+                    delete(() -> extractRequestEntity(entity -> onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem), strict ->
+                        cancelBooking(strict.getData().utf8String())
+                    )))
                 )),
                 pathPrefix("payment", () -> concat(
                     // Car enters: record entry timestamp
@@ -346,6 +363,44 @@ public class ParkingHttpServer {
         return onSuccess(fut, ack -> complete(StatusCodes.OK, "deleted"));
     }
 
+    /**
+     * Create a booking.
+     * POST /api/bookings
+     * Body: {"parkId": "lot-01", "licensePlate": "ABC123"}
+     */
+    private Route createBooking(String jsonBody) {
+        try {
+            BookingRequest req = gson.fromJson(jsonBody, BookingRequest.class);
+            var fut = AskPattern.ask(bookingActor,
+                    (ActorRef<BookingActor.BookingConfirmation> reply) -> new BookingActor.Book(req.parkId, req.licensePlate, reply),
+                    ASK_TIMEOUT,
+                    scheduler);
+            return onSuccess(fut, conf -> complete(StatusCodes.ACCEPTED, gson.toJson(new BookingResponse(conf.parkId, conf.licensePlate, conf.status))));
+        } catch (Exception e) {
+            logger.error("Error parsing booking request", e);
+            return complete(StatusCodes.BAD_REQUEST, "Invalid JSON");
+        }
+    }
+
+    /**
+     * Cancel a booking.
+     * DELETE /api/bookings
+     * Body: {"parkId": "lot-01", "licensePlate": "ABC123"}
+     */
+    private Route cancelBooking(String jsonBody) {
+        try {
+            CancelBookingRequest req = gson.fromJson(jsonBody, CancelBookingRequest.class);
+            var fut = AskPattern.ask(bookingActor,
+                    (ActorRef<BookingActor.BookingConfirmation> reply) -> new BookingActor.Cancel(req.parkId, req.licensePlate, reply),
+                    ASK_TIMEOUT,
+                    scheduler);
+            return onSuccess(fut, conf -> complete(StatusCodes.OK, gson.toJson(new BookingResponse(conf.parkId, conf.licensePlate, conf.status))));
+        } catch (Exception e) {
+            logger.error("Error parsing cancel booking request", e);
+            return complete(StatusCodes.BAD_REQUEST, "Invalid JSON");
+        }
+    }
+
     // DTOs for HTTP requests/responses
     public static class RegisterParkRequest { public String parkId; public int maxCapacity; }
     public static class RegisterParkResponse { public String parkId; public int maxCapacity; public String status; public RegisterParkResponse(String parkId, int maxCapacity, String status) { this.parkId = parkId; this.maxCapacity = maxCapacity; this.status = status; } }
@@ -357,4 +412,8 @@ public class ParkingHttpServer {
     // Payment DTOs
     public static class CarEnterRequest { public String licensePlate; public Long entryTimestamp; }
     public static class PayRequest { public String licensePlate; }
+    // Booking DTO
+    public static class BookingRequest { public String parkId; public String licensePlate; }
+    public static class BookingResponse { public String parkId; public String licensePlate; public String status; public BookingResponse(String parkId, String licensePlate, String status) { this.parkId = parkId; this.licensePlate = licensePlate; this.status = status; } }
+    public static class CancelBookingRequest { public String parkId; public String licensePlate; }
 }

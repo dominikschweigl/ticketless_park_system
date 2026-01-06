@@ -2,21 +2,22 @@ package com.ticketless.parking.app;
 
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.ActorRef;
-import akka.actor.typed.javadsl.AskPattern;
 import akka.actor.typed.Props;
-import scala.concurrent.duration.FiniteDuration;
-import java.time.Duration;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.function.BiConsumer;
 
 import com.ticketless.parking.actors.ParkingLotManagerActor;
 import com.ticketless.parking.actors.PaymentActor;
 import com.ticketless.parking.http.ParkingHttpServer;
-import com.ticketless.parking.messages.*;
+import com.ticketless.parking.actors.BookingActor;
+import io.nats.client.Connection;
+import io.nats.client.Nats;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Main entry point for the Ticketless Parking System application.
@@ -27,6 +28,8 @@ public class ParkingSystemApp {
     private final ActorSystem<ParkingLotManagerActor.Command> actorSystem;
     private final ActorRef<ParkingLotManagerActor.Command> parkingLotManager;
     private final ActorRef<PaymentActor.Command> paymentActor;
+    private final ActorRef<BookingActor.Command> bookingActor;
+    private final Connection parkinglot_mq;
     private final ParkingHttpServer httpServer;
 
     /**
@@ -37,9 +40,18 @@ public class ParkingSystemApp {
         this.actorSystem = ActorSystem.create(ParkingLotManagerActor.create(), "ParkingSystem", config);
         this.parkingLotManager = actorSystem;
         this.paymentActor = actorSystem.systemActorOf(PaymentActor.create(), "payment-actor", Props.empty());
+        // NATS
+        String natsUrl = System.getenv().getOrDefault("NATS_URL", "nats://localhost:4222");
+        try {
+            this.parkinglot_mq = Nats.connect(natsUrl);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to connect to NATS at " + natsUrl, e);
+        }
+        BiConsumer<String, String> publisher = (subject, json) -> this.parkinglot_mq.publish(subject, json.getBytes(StandardCharsets.UTF_8));
+        this.bookingActor = actorSystem.systemActorOf(BookingActor.create(publisher), "booking-actor", Props.empty());
 
-        // Initialize HTTP server for Python edge server communication
-        this.httpServer = new ParkingHttpServer(actorSystem, parkingLotManager, paymentActor);
+        // Initialize HTTP server
+        this.httpServer = new ParkingHttpServer(actorSystem, parkingLotManager, paymentActor, bookingActor);
 
         // Get HTTP server configuration from environment or use defaults
         String httpHost = System.getenv().getOrDefault("HTTP_HOST", "0.0.0.0");
@@ -88,6 +100,7 @@ public class ParkingSystemApp {
     public void shutdown() {
         logger.info("Shutting down ParkingSystemApp");
         httpServer.stop();
+        try { if (parkinglot_mq != null) parkinglot_mq.close(); } catch (Exception ignore) {}
         actorSystem.terminate();
     }
 

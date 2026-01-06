@@ -1,4 +1,5 @@
 import os
+import json
 import cv2
 import numpy as np
 import asyncio
@@ -12,12 +13,15 @@ import easyocr
 from cloud_parking_client import CloudParkingClient
 from parkinglot_tracker import ParkingLotTracker
 
-NATS_URL = os.environ.get("NATS_URL")
 DETECTION_MODEL_PATH = os.environ.get("DETECTION_MODEL_PATH")
 DB_PATH = os.environ.get("DB_PATH", "parking.db")
 CAR_PARK_ID = os.environ.get("CAR_PARK_ID", "lot-01")
 CAR_PARK_CAPACITY = int(os.environ.get("CAR_PARK_CAPACITY", "50"))
 CLOUD_URL = os.environ.get("CLOUD_URL", "http://localhost:8080")
+
+# NATS URLs: separate local (edge) vs cloud
+EDGE_NATS_URL = os.environ.get("EDGE_NATS_URL", "nats://localhost:4222")
+CLOUD_NATS_URL = os.environ.get("CLOUD_NATS_URL", "nats://localhost:4222")
 
 class ParkingDatabase:
     """
@@ -129,7 +133,7 @@ class ParkingDatabase:
         else:
             print(f"[DB] Completed exit for plate={plate}, car_park_id={self.car_park_id}")
 
-async def open_barrier(nc: NATS, barrier_id: str):
+async def open_barrier(nc_edge: NATS, barrier_id: str):
     """
     Simulated barrier open.
 
@@ -143,7 +147,7 @@ async def open_barrier(nc: NATS, barrier_id: str):
     return True
 
 
-async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDatabase, tracker: ParkingLotTracker, cloud_client: CloudParkingClient):
+async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: ParkingDatabase, tracker: ParkingLotTracker, cloud_client: CloudParkingClient):
     checkpoint_type = id_.split("_")[0]  # "entry" or "exit" (from camera_id)
 
     if checkpoint_type == "entry":
@@ -154,7 +158,7 @@ async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDat
                 f"[LOGIC] Plate {plate_text} is already inside "
                 f"(since {active['entry_time']}). Not creating a new session."
             )
-            await open_barrier(nc, id_)
+            await open_barrier(nc_edge, id_)
         else:
             print(f"[LOGIC] Plate {plate_text} is entering. Creating new session.")
             db.register_entry(plate_text)
@@ -166,11 +170,15 @@ async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDat
             except Exception as e:
                 print(f"[CLOUD][PAYMENT] enter failed for {plate_text}: {e}")
 
-            # Increment occupancy and send to cloud
-            await tracker.increment_occupancy()
-            print(f"[CLOUD] Updated occupancy to {tracker.current_occupancy}/{tracker.max_capacity}")
+            # Increment occupancy only if no booking exists
+            if tracker.has_booking(plate_text):
+                print(f"[BOOKING] Consuming booking for {plate_text}, not incrementing occupancy again.")
+                tracker.consume_booking(plate_text)
+            else:
+                await tracker.increment_occupancy()
+                print(f"[CLOUD] Updated occupancy to {tracker.current_occupancy}/{tracker.max_capacity}")
 
-            await open_barrier(nc, id_)
+            await open_barrier(nc_edge, id_)
 
     elif checkpoint_type == "exit":
         # Check with cloud if this plate has paid
@@ -196,7 +204,7 @@ async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDat
                 "Possible tailgating or missed entry detection."
             )
             # For now allow exit but log
-            await open_barrier(nc, id_)
+            await open_barrier(nc_edge, id_)
             return
 
         print(f"[LOGIC] Plate {plate_text} exiting. Completing session id={active['id']}.")
@@ -213,7 +221,7 @@ async def checkpoint_handler(plate_text: str, id_: str, nc: NATS, db: ParkingDat
         except Exception as e:
             print(f"[CLOUD][PAYMENT] exit delete failed for {plate_text}: {e}")
 
-        await open_barrier(nc, id_)
+        await open_barrier(nc_edge, id_)
 
     else:
         print(f"[LOGIC] Unknown checkpoint type for camera id {id_}, raw plate={plate_text}")
@@ -223,9 +231,11 @@ def show_image(window_name, img):
     cv2.waitKey(1)
 
 async def main():
-    # Initialize NATS connection
-    nc = NATS()
-    await nc.connect(NATS_URL)
+    # Initialize NATS connections
+    nc_edge = NATS()
+    await nc_edge.connect(EDGE_NATS_URL)
+    nc_cloud = NATS()
+    await nc_cloud.connect(CLOUD_NATS_URL)
 
     # Initialize database
     db = ParkingDatabase(DB_PATH, CAR_PARK_ID)
@@ -295,13 +305,13 @@ async def main():
         if len(ocr_results) > 0:
             # each result = [bbox, text, confidence]
             plate_text = ocr_results[0][1]
-            await checkpoint_handler(plate_text, id_, nc, db, tracker, cloud_client)
+            await checkpoint_handler(plate_text, id_, nc_edge, db, tracker, cloud_client)
         else:
             plate_text = "OCR failed to detect text"
         print(f"Detected Plate Box: {x1,y1,x2,y2} (YOLO conf={conf:.2f})")
         print(f"OCR Result: {plate_text}")
 
-    await nc.subscribe("camera.entry", cb=entry_handler)
+    await nc_edge.subscribe("camera.entry", cb=entry_handler)
 
     async def exit_handler(msg):
         id_ = msg.headers.get("camera_id", "unknown")
@@ -334,14 +344,37 @@ async def main():
         plate_text = None
         if len(ocr_results) > 0:
             plate_text = ocr_results[0][1]
-            await checkpoint_handler(plate_text, id_, nc, db, tracker, cloud_client)
+            await checkpoint_handler(plate_text, id_, nc_edge, db, tracker, cloud_client)
         else:
             plate_text = "OCR failed to detect text"
 
         print(f"[EXIT] Detected Plate Box: {x1,y1,x2,y2} (YOLO conf={conf:.2f})")
         print(f"[EXIT] OCR Result: {plate_text}")
 
-    await nc.subscribe("camera.exit", cb=exit_handler)
+    await nc_edge.subscribe("camera.exit", cb=exit_handler)
+
+    # Subscribe to booking events for this parking lot via cloud NATS
+    async def booking_handler(msg):
+        try:
+            import json
+            data = json.loads(msg.data.decode("utf-8"))
+            plate = data.get("licensePlate")
+            action = data.get("action")
+            if not plate:
+                print("[BOOKING] Received booking message without licensePlate")
+                return
+            if action == "book":
+                print(f"[BOOKING] Received booking for {plate} -> increasing occupancy and tracking booking")
+                await tracker.add_booking(plate)
+            elif action == "cancel":
+                print(f"[BOOKING] Received cancel for {plate} -> removing booking and decreasing occupancy if present")
+                await tracker.cancel_booking_safe(plate)
+            else:
+                print(f"[BOOKING] Unknown action '{action}' for plate {plate}")
+        except Exception as e:
+            print(f"[BOOKING] Failed to process booking message: {e}")
+
+    await nc_cloud.subscribe(f"booking.{CAR_PARK_ID}", cb=booking_handler)
 
     print("Camera subscriber running...")
     print(f"Parking Lot: {CAR_PARK_ID} (Capacity: {CAR_PARK_CAPACITY})")
@@ -350,7 +383,8 @@ async def main():
     try:
         await asyncio.Future()  # run forever until cancelled
     finally:
-        await nc.drain()
+        await nc_edge.drain()
+        await nc_cloud.drain()
         await cloud_client.close()
 
 asyncio.run(main())

@@ -29,6 +29,7 @@ class ParkingLotTracker:
         self.max_capacity = max_capacity
         self.current_occupancy = 0
         self.registered = False
+        self._bookings = set()
 
     async def register(self):
         """Register this parking lot with the cloud system."""
@@ -94,3 +95,28 @@ class ParkingLotTracker:
     def is_full(self) -> bool:
         """Check if parking lot is full."""
         return self.current_occupancy >= self.max_capacity
+
+    def has_booking(self, license_plate: str) -> bool:
+        return license_plate in self._bookings
+
+    async def add_booking(self, license_plate: str):
+        if not self.has_booking(license_plate):
+            self._bookings.add(license_plate)
+            # increase occupancy by one and send to cloud
+            await self.update_occupancy(self.current_occupancy + 1)
+
+    def consume_booking(self, license_plate: str):
+        self._bookings.discard(license_plate)
+
+    async def cancel_booking(self, license_plate: str):
+        """
+        Cancel a booking safely: only decrement occupancy if a booking existed.
+        Also consume the booking token.
+        """
+        if self.has_booking(license_plate):
+            self.consume_booking(license_plate)
+            await self.update_occupancy(self.current_occupancy - 1)
+        else:
+            # No booking tracked; do not adjust occupancy
+            logger.warning(f"Cancel received for {license_plate} but no booking tracked; ignoring occupancy change.")
+
