@@ -113,48 +113,6 @@ public class ParkingSystemApp {
 
         ParkingSystemApp app = new ParkingSystemApp();
 
-        // Example: Edge servers register their parking lots
-        logger.info("Edge servers registering parking lots...");
-        app.registerParkingLot("lot-01", 50);
-        app.registerParkingLot("lot-02", 100);
-        app.registerParkingLot("lot-03", 25);
-
-        // Give the system a moment to process registrations
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        // Example: Edge servers send periodic occupancy updates
-        logger.info("Simulating occupancy updates from edge servers...");
-        
-        // Edge server 1 sending occupancy updates for lot-01
-        app.updateOccupancy("lot-01", 15);
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        
-        app.updateOccupancy("lot-01", 18);
-
-        // Edge server 2 sending occupancy updates for lot-02
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        app.updateOccupancy("lot-02", 45);
-
-        // Edge server 1 sending occupancy updates for lot-03
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        app.updateOccupancy("lot-03", 8);
-
         // Keep the application running
         logger.info("Parking System is running. Press Ctrl+C to exit.");
         try {
@@ -162,7 +120,5 @@ public class ParkingSystemApp {
         } catch (IOException e) {
             logger.error("Error reading input", e);
         }
-
-        app.shutdown();
     }
 }
