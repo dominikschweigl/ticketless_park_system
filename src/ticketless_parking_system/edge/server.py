@@ -136,7 +136,7 @@ class ParkingDatabase:
 async def open_barrier(nc_edge: NATS, barrier_id: str):
     
     try: 
-        reply = await nc.request(
+        reply = await nc_edge.request(
            f"{barrier_id}.trigger",
            b"",
            timeout=30 
