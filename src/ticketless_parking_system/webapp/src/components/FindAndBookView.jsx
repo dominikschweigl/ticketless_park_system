@@ -1,33 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Navigation } from 'lucide-react';
+import { getRegisteredParkingLots, getParkingLotStatus } from "../services/parkingApi";
 
 // --- DEPENDENCIES (Included inline for preview compatibility) ---
 // In your local project, you should import these from their respective files:
 // import { Button } from './ui/Button';
 // import { Card } from './ui/Card';
 // import { mockApi } from '../services/mockApi';
-
-const mockApi = {
-  getParkingLots: async () => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve([
-          { id: 1, name: "Central Station Plaza", address: "12 Station Rd", total: 150, free: 12, price: 4.5, dist: "0.4 km" },
-          { id: 2, name: "Downtown Market", address: "88 Main St", total: 80, free: 0, price: 5.0, dist: "1.2 km" },
-          { id: 3, name: "Westside Garage", address: "420 West Ave", total: 200, free: 145, price: 3.0, dist: "2.5 km" },
-          { id: 4, name: "Harbor View", address: "1 Dockside Ln", total: 60, free: 5, price: 6.5, dist: "3.1 km" },
-        ]);
-      }, 800);
-    });
-  },
-  bookSpot: async (lotId, plate, time) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ success: true, bookingRef: "BK-" + Math.floor(Math.random() * 9999) });
-      }, 1000);
-    });
-  }
-};
 
 const Button = ({ children, onClick, disabled, loading, variant = "primary", className = "" }) => {
   const baseStyles = "px-4 py-2 rounded-md font-medium transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-1";
@@ -78,11 +57,47 @@ export const FindAndBookView = ({ showNotification }) => {
   const [bookingLoading, setBookingLoading] = useState(false);
 
   useEffect(() => {
-    mockApi.getParkingLots().then(data => {
-      setLots(data);
-      setLoading(false);
-    });
+    let alive = true;
+
+    (async () => {
+      try {
+        setLoading(true);
+
+        // 1) get IDs
+        const reg = await getRegisteredParkingLots();
+        const parks = reg.parks || {}; // { "lot-01": 50, ... }
+        const ids = Object.keys(parks);
+
+        // 2) fetch each status (simple parallel)
+        const statuses = await Promise.all(
+          ids.map((id) => getParkingLotStatus(id))
+        );
+
+        // 3) map to what your UI expects
+        const uiLots = statuses.map((s) => ({
+          id: s.parkId,
+          name: s.parkId,               // no name in backend -> show id
+          address: "",                  // backend doesn’t provide it
+          total: s.maxCapacity,
+          free: s.availableSpaces,
+          price: 4.5,                   // backend doesn’t provide -> hardcode for now
+          dist: "",                      // backend doesn’t provide
+        }));
+
+        if (alive) setLots(uiLots);
+      } catch (e) {
+        console.error(e);
+        if (showNotification) showNotification("error", e.message || "Failed to load parking lots");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
   }, []);
+
 
   const handleBook = async (e) => {
     e.preventDefault();
