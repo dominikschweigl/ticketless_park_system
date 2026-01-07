@@ -25,17 +25,21 @@ EDGE_NATS_URL = os.environ.get("EDGE_NATS_URL", "nats://localhost:4222")
 CLOUD_NATS_URL = os.environ.get("CLOUD_NATS_URL", "nats://localhost:4222")
 
 async def open_barrier(nc_edge: NATS, barrier_id: str):
-    """
-    Simulated barrier open.
+    
+    try: 
+        reply = await nc_edge.request(
+           f"{barrier_id}.trigger",
+           b"",
+           timeout=30 
+        )
 
-    In the real system this would send a NATS request to the barrier service:
-        await nc.request(f"{barrier_id}.trigger", b"", timeout=30)
+        if reply.data == b"done":
+            print("Barrier opened successfully.")
+        else:
+            print("Barrier failure: ", reply.data.decode())
 
-    For now we just log and pretend it worked so the rest of the edge logic
-    (detection + DB) can be developed and tested.
-    """
-    print(f"[SIM] open_barrier called for barrier_id={barrier_id} (no real barrier service running).")
-    return True
+    except asyncio.TimeoutError:
+        print("Timeout: Communication with barrier failed.")
 
 
 async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: ParkingDatabase, tracker: ParkingLotTracker, cloud_client: CloudParkingClient):
@@ -205,7 +209,7 @@ async def main():
     await nc_edge.subscribe("camera.entry", cb=entry_handler)
 
     async def exit_handler(msg):
-        id_ = msg.headers.get("camera_id", "unknown")
+        id_ = msg.header.get("camera_id", "unknown")
         jpg = np.frombuffer(msg.data, np.uint8)
         img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
 
