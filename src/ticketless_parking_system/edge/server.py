@@ -10,6 +10,8 @@ from ultralytics import YOLO
 from datetime import datetime
 import easyocr
 from edge_db import ParkingDatabase
+from nats import errors as nats_errors
+
 
 from cloud_parking_client import CloudParkingClient
 from parkinglot_tracker import ParkingLotTracker
@@ -25,21 +27,29 @@ EDGE_NATS_URL = os.environ.get("EDGE_NATS_URL", "nats://localhost:4222")
 CLOUD_NATS_URL = os.environ.get("CLOUD_NATS_URL", "nats://localhost:4222")
 
 async def open_barrier(nc_edge: NATS, barrier_id: str):
-    
-    try: 
-        reply = await nc_edge.request(
-           f"{barrier_id}.trigger",
-           b"",
-           timeout=30 
-        )
+    subject = f"{barrier_id}.trigger"
+    try:
+        reply = await nc_edge.request(subject, b"", timeout=2)
 
         if reply.data == b"done":
-            print("Barrier opened successfully.")
+            print(f"[BARRIER] Opened successfully via {subject}")
+            return True
         else:
-            print("Barrier failure: ", reply.data.decode())
+            print(f"[BARRIER] Unexpected reply from {subject}: {reply.data!r}")
+            return False
+
+    except nats_errors.NoRespondersError:
+        # No barrier microservice is running -> simulate success so system keeps working
+        print(f"[BARRIER][SIM] No responders on {subject}. Simulating open.")
+        return True
 
     except asyncio.TimeoutError:
-        print("Timeout: Communication with barrier failed.")
+        print(f"[BARRIER] Timeout waiting for reply on {subject}.")
+        return False
+
+    except Exception as e:
+        print(f"[BARRIER] Error calling {subject}: {e}")
+        return False
 
 
 async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: ParkingDatabase, tracker: ParkingLotTracker, cloud_client: CloudParkingClient):
