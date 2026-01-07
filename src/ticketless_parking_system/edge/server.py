@@ -318,7 +318,7 @@ async def main():
     await nc_edge.subscribe("camera.entry", cb=entry_handler)
 
     async def exit_handler(msg):
-        id_ = msg.headers.get("camera_id", "unknown")
+        id_ = msg.header.get("camera_id", "unknown")
         jpg = np.frombuffer(msg.data, np.uint8)
         img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
 
