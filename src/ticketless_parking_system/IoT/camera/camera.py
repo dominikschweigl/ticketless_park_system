@@ -100,7 +100,7 @@ async def main():
     nc = NATS()
     await nc.connect(NATS_URL)
 
-    car_paths = sorted(glob.glob("./data/Cars*.png"))
+    car_paths = sorted(glob.glob("./data/Car*.png"))
     empty_path = "./data/Empty.png"
 
     if not car_paths:

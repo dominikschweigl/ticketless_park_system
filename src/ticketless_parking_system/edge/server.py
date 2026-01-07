@@ -9,6 +9,7 @@ from nats.aio.client import Client as NATS
 from ultralytics import YOLO
 from datetime import datetime
 import easyocr
+from edge_db import ParkingDatabase
 
 from cloud_parking_client import CloudParkingClient
 from parkinglot_tracker import ParkingLotTracker
@@ -16,122 +17,12 @@ from parkinglot_tracker import ParkingLotTracker
 DETECTION_MODEL_PATH = os.environ.get("DETECTION_MODEL_PATH")
 DB_PATH = os.environ.get("DB_PATH", "parking.db")
 CAR_PARK_ID = os.environ.get("CAR_PARK_ID", "lot-01")
-CAR_PARK_CAPACITY = int(os.environ.get("CAR_PARK_CAPACITY", "50"))
-CLOUD_URL = os.environ.get("CLOUD_URL", "http://localhost:8080")
+CAR_PARK_CAPACITY = int(os.environ.get("CAR_PARK_CAPACITY", "67"))
+CLOUD_URL = os.environ.get("CLOUD_URL", "http://parking-system-cloud:8080")
 
 # NATS URLs: separate local (edge) vs cloud
 EDGE_NATS_URL = os.environ.get("EDGE_NATS_URL", "nats://localhost:4222")
 CLOUD_NATS_URL = os.environ.get("CLOUD_NATS_URL", "nats://localhost:4222")
-
-class ParkingDatabase:
-    """
-    Very small wrapper around SQLite for parking sessions.
-    """
-
-    def __init__(self, db_path: str, car_park_id: str):
-        self.db_path = db_path
-        self.car_park_id = car_park_id
-        # check_same_thread=False because we may hit this from different asyncio tasks
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-
-    def init_db(self):
-        cur = self.conn.cursor()
-
-        # Table with one row per parking visit
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS parking_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                plate TEXT NOT NULL,
-                car_park_id TEXT NOT NULL,
-                entry_time TEXT NOT NULL,
-                exit_time TEXT,
-                status TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
-
-        self.conn.commit()
-
-    @staticmethod
-    def _now_iso() -> str:
-        # UTC ISO8601 with seconds, plus 'Z' to make it explicit
-        return datetime.utcnow().isoformat(timespec="seconds") + "Z"
-
-    def get_active_session(self, plate: str):
-        """
-        Return the most recent 'inside' session for this plate in this car park,
-        or None if there is no active session.
-        """
-        cur = self.conn.cursor()
-        cur.execute(
-            """
-            SELECT *
-            FROM parking_sessions
-            WHERE plate = ? AND car_park_id = ? AND status = 'inside'
-            ORDER BY entry_time DESC
-            LIMIT 1
-            """,
-            (plate, self.car_park_id),
-        )
-        row = cur.fetchone()
-        return row  # sqlite3.Row or None
-
-    def has_active_session(self, plate: str) -> bool:
-        return self.get_active_session(plate) is not None
-
-    def register_entry(self, plate: str):
-        """
-        Create a new 'inside' parking session for this plate,
-        but only if there is no active ('inside') session yet.
-        """
-        if self.has_active_session(plate):
-            print(f"[DB] Active session already exists for plate={plate}, skipping new entry row.")
-            return
-
-        now = self._now_iso()
-        cur = self.conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO parking_sessions
-                (plate, car_park_id, entry_time, status, created_at, updated_at)
-            VALUES
-                (?, ?, ?, 'inside', ?, ?)
-            """,
-            (plate, self.car_park_id, now, now, now),
-        )
-        self.conn.commit()
-        print(f"[DB] Registered entry for plate={plate}, car_park_id={self.car_park_id}")
-
-    def complete_exit(self, plate: str):
-        """
-        Mark the most recent 'inside' session for this plate as completed.
-        This will be used later when we actually implement exit-side logic.
-        """
-        now = self._now_iso()
-        cur = self.conn.cursor()
-        cur.execute(
-            """
-            UPDATE parking_sessions
-            SET exit_time = ?, status = 'completed', updated_at = ?
-            WHERE id = (
-                SELECT id FROM parking_sessions
-                WHERE plate = ? AND car_park_id = ? AND status = 'inside'
-                ORDER BY entry_time DESC
-                LIMIT 1
-            )
-            """,
-            (now, now, plate, self.car_park_id),
-        )
-        self.conn.commit()
-
-        if cur.rowcount == 0:
-            print(f"[DB] WARNING: No active session found for plate={plate} to complete.")
-        else:
-            print(f"[DB] Completed exit for plate={plate}, car_park_id={self.car_park_id}")
 
 async def open_barrier(nc_edge: NATS, barrier_id: str):
     """

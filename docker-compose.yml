@@ -18,8 +18,8 @@ services:
     container_name: camera-simulator
     restart: always
     environment:
-      - EDGE_NATS_URL=nats://nats:4222
-      - CLOUD_NATS_URL=nats://nats:4222
+      - NATS_URL=nats://nats:4222
+      - CAMERA_ID=0
     depends_on:
       - nats
     networks:
@@ -33,7 +33,8 @@ services:
     container_name: edge-server
     restart: always
     environment:
-      - NATS_URL=nats://nats:4222
+      - EDGE_NATS_URL=nats://nats:4222
+      - CLOUD_NATS_URL=nats://nats:4222
       - DB_PATH=/app/data/parking.db
     depends_on:
       - nats
@@ -42,6 +43,23 @@ services:
     volumes:
       # persistent storage for SQLite DB file
       - edge-db-data:/app/data
+
+  cloud:
+      build:
+        context: ./src/ticketless_parking_system/cloud   # <-- adjust to your Dockerfile folder
+      container_name: parking-system-cloud
+      restart: always
+      ports:
+        - "8080:8080"
+      environment:
+        - PARKING_ENVIRONMENT=development
+        - PARKING_ENABLE_METRICS=false
+        - HTTP_PORT=8080
+        - NATS_URL=nats://nats:4222
+      depends_on:
+        - nats
+      networks:
+        - parking-net
 
 networks:
   parking-net:
