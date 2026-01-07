@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Navigation } from 'lucide-react';
-import { getRegisteredParkingLots, getParkingLotStatus } from "../services/parkingApi";
+import { getRegisteredParkingLots, getParkingLotStatus, createBooking } from "../services/parkingApi";
 
 // --- DEPENDENCIES (Included inline for preview compatibility) ---
 // In your local project, you should import these from their respective files:
@@ -8,27 +8,43 @@ import { getRegisteredParkingLots, getParkingLotStatus } from "../services/parki
 // import { Card } from './ui/Card';
 // import { mockApi } from '../services/mockApi';
 
-const Button = ({ children, onClick, disabled, loading, variant = "primary", className = "" }) => {
-  const baseStyles = "px-4 py-2 rounded-md font-medium transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-1";
+const Button = ({
+  children,
+  variant = "primary",
+  className = "",
+  loading,
+  disabled,
+  type = "button",
+  ...props
+}) => {
+  const baseStyles =
+    "px-4 py-2 rounded-md font-medium transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-1";
   const variants = {
     primary: "bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500 shadow-sm",
-    secondary: "bg-slate-100 hover:bg-slate-200 text-slate-700 focus:ring-slate-400 border border-slate-200",
+    secondary:
+      "bg-slate-100 hover:bg-slate-200 text-slate-700 focus:ring-slate-400 border border-slate-200",
     success: "bg-emerald-600 hover:bg-emerald-700 text-white focus:ring-emerald-500 shadow-sm",
     danger: "bg-red-500 hover:bg-red-600 text-white focus:ring-red-500",
-    ghost: "bg-transparent hover:bg-slate-100 text-slate-600"
+    ghost: "bg-transparent hover:bg-slate-100 text-slate-600",
   };
 
   return (
-    <button 
-      onClick={onClick} 
-      disabled={disabled || loading} 
-      className={`${baseStyles} ${variants[variant]} ${disabled || loading ? 'opacity-60 cursor-not-allowed' : ''} ${className}`}
+    <button
+      type={type}
+      disabled={disabled || loading}
+      className={`${baseStyles} ${variants[variant]} ${
+        disabled || loading ? "opacity-60 cursor-not-allowed" : ""
+      } ${className}`}
+      {...props}
     >
-      {loading && <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>}
+      {loading && (
+        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+      )}
       {children}
     </button>
   );
 };
+
 
 const Card = ({ title, children, className = "", footer }) => (
   <div className={`bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden ${className}`}>
@@ -99,15 +115,31 @@ export const FindAndBookView = ({ showNotification }) => {
   }, []);
 
 
-  const handleBook = async (e) => {
-    e.preventDefault();
-    if (!bookingPlate) return;
-    setBookingLoading(true);
-    await mockApi.bookSpot(selectedLot.id, bookingPlate, 'NOW');
-    setBookingLoading(false);
-    setSelectedLot(null);
-    if (showNotification) showNotification('success', `Spot reserved at ${selectedLot.name} for ${bookingPlate}!`);
-    setBookingPlate('');
+    const handleBook = async (e) => {
+      e.preventDefault();
+      if (!bookingPlate || !selectedLot) return;
+
+      setBookingLoading(true);
+      try {
+        const res = await createBooking(selectedLot.id, bookingPlate);
+
+        if (showNotification) {
+          showNotification(
+            "success",
+            `Booked ${res.parkId} for ${res.licensePlate} (${res.status})`
+          );
+        }
+
+        setSelectedLot(null);
+        setBookingPlate("");
+        // optional: reload lots so availability updates
+        // await loadLots();
+      } catch (err) {
+        console.error(err);
+        if (showNotification) showNotification("error", err.message || "Booking failed");
+      } finally {
+        setBookingLoading(false);
+      }
   };
 
   return (
