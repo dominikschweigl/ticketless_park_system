@@ -1,4 +1,3 @@
-// NO base url needed when using vite proxy
 const BASE = "";
 
 export async function getRegisteredParkingLots() {
@@ -25,6 +24,30 @@ export async function createBooking(parkId, licensePlate) {
     throw new Error(txt || "Booking failed");
   }
 
-  // returns JSON: { parkId, licensePlate, status }
   return res.json();
 }
+
+export async function paymentCheck(licensePlate) {
+  const res = await fetch(`/api/payment/check?licensePlate=${encodeURIComponent(licensePlate)}`);
+  if (!res.ok) throw new Error("Failed to check payment");
+  return res.json(); // PaymentStatus
+}
+
+export async function paymentPay(licensePlate) {
+  const res = await fetch(`/api/payment/pay`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ licensePlate }),
+  });
+  if (!res.ok) throw new Error("Payment failed");
+  return res.json(); // PaymentStatus (paid=true)
+}
+
+export async function paymentExit(licensePlate) {
+  const res = await fetch(`/api/payment/exit?licensePlate=${encodeURIComponent(licensePlate)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Exit cleanup failed");
+  return res.text(); // "deleted"
+}
+

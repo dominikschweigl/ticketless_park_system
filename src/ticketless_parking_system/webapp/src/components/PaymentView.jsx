@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Car, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
-import { mockApi } from '../services/mockApi';
+import { paymentCheck, paymentPay, paymentExit } from "../services/parkingApi";
 
 export const PaymentView = ({ showNotification }) => {
   const [plate, setPlate] = useState('');
@@ -10,32 +10,84 @@ export const PaymentView = ({ showNotification }) => {
   const [paymentStatus, setPaymentStatus] = useState(null); // null, 'checking', 'results', 'paid'
   const [billData, setBillData] = useState(null);
 
-  const checkPlate = async (e) => {
-    e.preventDefault();
-    if (!plate) return;
-    setLoading(true);
-    setPaymentStatus('checking');
-    setBillData(null);
-
-    try {
-      const result = await mockApi.checkPaymentStatus(plate);
-      setBillData(result);
-      setPaymentStatus('results');
-      setLoading(false);
-    } catch (err) {
-      if (showNotification) showNotification('error', err.message);
-      setLoading(false);
-      setPaymentStatus(null);
-    }
+    const formatDuration = (ms) => {
+    const totalMin = Math.max(0, Math.round(ms / 60000));
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h <= 0) return `${m} min`;
+    return `${h}h ${m}m`;
   };
+
+  const toBillData = (ps) => {
+    const unknown = !ps.entryTimestamp || ps.entryTimestamp === 0;
+
+    // If we never saw "enter", treat as not in lot / no fees
+    if (unknown) {
+      return {
+        status: "NONE",
+        amount: 0,
+        entryTime: "",
+        duration: "",
+        raw: ps,
+      };
+    }
+
+    const amount = (ps.priceCents || 0) / 100.0;
+    const durationMs = (ps.currentTimestamp || Date.now()) - ps.entryTimestamp;
+
+    return {
+      // your UI expects UNPAID vs else
+      status: ps.paid ? "PAID" : "UNPAID",
+      amount,
+      entryTime: new Date(ps.entryTimestamp).toLocaleString(),
+      duration: formatDuration(durationMs),
+      raw: ps,
+    };
+  };
+
+
+  const checkPlate = async (e) => {
+  e.preventDefault();
+  if (!plate) return;
+
+  setLoading(true);
+  setPaymentStatus("checking");
+  setBillData(null);
+
+  try {
+    const ps = await paymentCheck(plate);
+    const data = toBillData(ps);
+
+    setBillData(data);
+    setPaymentStatus("results");
+  } catch (err) {
+    console.error(err);
+    if (showNotification) showNotification("error", err.message || "Check failed");
+    setPaymentStatus(null);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handlePay = async () => {
-    setLoading(true);
-    await mockApi.processPayment(plate, billData.amount);
+  setLoading(true);
+  try {
+    const ps = await paymentPay(plate);
+    setBillData(toBillData(ps));
+
+    // optional but nice: clear session after paying (simulates leaving)
+    // await paymentExit(plate);
+
+    setPaymentStatus("paid");
+    if (showNotification) showNotification("success", "Payment successful! Gate will open automatically.");
+  } catch (err) {
+    console.error(err);
+    if (showNotification) showNotification("error", err.message || "Payment failed");
+  } finally {
     setLoading(false);
-    setPaymentStatus('paid');
-    if (showNotification) showNotification('success', 'Payment successful! Gate will open automatically.');
-  };
+  }
+};
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -56,12 +108,11 @@ export const PaymentView = ({ showNotification }) => {
                 <input
                   type="text"
                   value={plate}
-                  onChange={(e) => setPlate(e.target.value.toUpperCase())}
-                  className="block w-full pl-10 pr-3 py-4 text-lg border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500 uppercase tracking-widest font-mono bg-slate-50 placeholder-slate-400"
+                  onChange={(e) => setPlate(e.target.value)}
+                  className="block w-full pl-10 pr-3 py-4 text-lg border border-slate-300 rounded-md focus:ring-blue-500 focus:border-blue-500 tracking-widest font-mono bg-slate-50 placeholder-slate-400"
                   placeholder="ABC-1234"
                 />
               </div>
-              <p className="text-xs text-slate-400 mt-2">Try entering a plate ending in 'X' to simulate unpaid fees.</p>
             </div>
             <Button type="submit" loading={loading} className="w-full py-3 text-lg">
               Check Fees
@@ -84,7 +135,7 @@ export const PaymentView = ({ showNotification }) => {
           </div>
         ) : (
           <div className="space-y-6 animate-fadeIn">
-            {billData.status === 'UNPAID' ? (
+            {String(billData?.status || "").toUpperCase() === "UNPAID" ? (
               <>
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                    <div>
