@@ -10,12 +10,16 @@ public class ParkingLotStatusMessage extends ParkingLotMessage {
     private final int currentOccupancy;
     private final int maxCapacity;
     private final boolean isFull;
+    private final double lat;
+    private final double lng;
 
-    public ParkingLotStatusMessage(String parkId, int currentOccupancy, int maxCapacity, boolean isFull) {
+    public ParkingLotStatusMessage(String parkId, int currentOccupancy, int maxCapacity, boolean isFull, double lat, double lng) {
         this.parkId = parkId;
         this.currentOccupancy = currentOccupancy;
         this.maxCapacity = maxCapacity;
         this.isFull = isFull;
+        this.lat = lat;
+        this.lng = lng;
     }
 
     public String getParkId() {
@@ -24,6 +28,14 @@ public class ParkingLotStatusMessage extends ParkingLotMessage {
 
     public int getCurrentOccupancy() {
         return currentOccupancy;
+    }
+
+    public double getLat() { 
+        return lat; 
+    }
+    
+    public double getLng() { 
+        return lng; 
     }
 
     public int getMaxCapacity() {

@@ -70,9 +70,10 @@ public class ParkingSystemApp {
      * @param parkId      Unique identifier for the parking lot
      * @param maxCapacity Maximum capacity of the parking lot
      */
-    public void registerParkingLot(String parkId, int maxCapacity) {
-        parkingLotManager.tell(new ParkingLotManagerActor.RegisterLotNoReply(parkId, maxCapacity));
+    public void registerParkingLot(String parkId, int maxCapacity, double lat, double lng) {
+        parkingLotManager.tell(new ParkingLotManagerActor.RegisterLotNoReply(parkId, maxCapacity, lat, lng));
     }
+
 
     /**
      * Gets list of all registered parking lots.

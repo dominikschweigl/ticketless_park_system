@@ -23,20 +23,28 @@ public class ParkingLotManagerActor {
     public static final class RegisterLot implements Command {
         public final String parkId;
         public final int maxCapacity;
+        public final double lat;
+        public final double lng;
         public final ActorRef<ParkRegisteredMessage> replyTo;
-        public RegisterLot(String parkId, int maxCapacity, ActorRef<ParkRegisteredMessage> replyTo) {
+        public RegisterLot(String parkId, int maxCapacity, double lat, double lng,ActorRef<ParkRegisteredMessage> replyTo) {
             this.parkId = parkId;
             this.maxCapacity = maxCapacity;
+            this.lat = lat;
+            this.lng = lng;
             this.replyTo = replyTo;
         }
     }
 
     public static final class RegisterLotNoReply implements Command {
         public final String parkId;
+        public final double lat;
+        public final double lng;
         public final int maxCapacity;
-        public RegisterLotNoReply(String parkId, int maxCapacity) {
+        public RegisterLotNoReply(String parkId, int maxCapacity, double lat, double lng) {
             this.parkId = parkId;
             this.maxCapacity = maxCapacity;
+            this.lat = lat;
+            this.lng = lng;
         }
     }
 
@@ -111,7 +119,7 @@ public class ParkingLotManagerActor {
                 msg.replyTo.tell(new ParkRegisteredMessage(parkId, parkCapacities.get(parkId)));
                 return Behaviors.same();
             }
-            ActorRef<ParkingLotActor.Command> child = ctx.spawn(ParkingLotActor.create(parkId, msg.maxCapacity), "park-" + parkId);
+            ActorRef<ParkingLotActor.Command> child = ctx.spawn(ParkingLotActor.create(parkId, msg.maxCapacity, msg.lat, msg.lng), "park-" + parkId);
             parkActors.put(parkId, child);
             parkCapacities.put(parkId, msg.maxCapacity);
             log.info("Registered parking lot {} (capacity: {})", parkId, msg.maxCapacity);
@@ -125,7 +133,7 @@ public class ParkingLotManagerActor {
                 log.warn("Parking lot {} already registered", parkId);
                 return Behaviors.same();
             }
-            ActorRef<ParkingLotActor.Command> child = ctx.spawn(ParkingLotActor.create(parkId, msg.maxCapacity), "park-" + parkId);
+            ActorRef<ParkingLotActor.Command> child = ctx.spawn(ParkingLotActor.create(parkId, msg.maxCapacity, msg.lat, msg.lng), "park-" + parkId);
             parkActors.put(parkId, child);
             parkCapacities.put(parkId, msg.maxCapacity);
             log.info("Registered parking lot {} (capacity: {})", parkId, msg.maxCapacity);
@@ -163,7 +171,7 @@ public class ParkingLotManagerActor {
                 child.tell(new ParkingLotActor.GetStatus(msg.replyTo));
             } else {
                 log.warn("Parking lot {} not found for status query", msg.parkId);
-                msg.replyTo.tell(new ParkingLotStatusMessage(msg.parkId, 0, 0, false));
+                msg.replyTo.tell(new ParkingLotStatusMessage(msg.parkId, 0, 0, false, 0, 0));
             }
             return Behaviors.same();
         }

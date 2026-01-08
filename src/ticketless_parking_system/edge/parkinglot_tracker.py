@@ -14,7 +14,9 @@ class ParkingLotTracker:
         self,
         cloud_client: CloudParkingClient,
         park_id: str,
-        max_capacity: int
+        max_capacity: int,
+        lat: float ,
+        lng: float
     ):
         """
         Initialize the parking lot tracker.
@@ -30,13 +32,17 @@ class ParkingLotTracker:
         self.current_occupancy = 0
         self.registered = False
         self._bookings = set()
+        self.lat = lat
+        self.lng = lng
 
     async def register(self):
         """Register this parking lot with the cloud system."""
         if not self.registered:
             await self.cloud_client.register_parking_lot(
                 self.park_id,
-                self.max_capacity
+                self.max_capacity,
+                self.lat,
+                self.lng
             )
             self.registered = True
 

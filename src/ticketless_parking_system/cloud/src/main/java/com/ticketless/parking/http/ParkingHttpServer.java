@@ -195,11 +195,7 @@ public class ParkingHttpServer {
 
             CompletionStage<ParkRegisteredMessage> response = AskPattern.ask(
                     parkingLotManager,
-                    (ActorRef<ParkRegisteredMessage> replyTo) -> new ParkingLotManagerActor.RegisterLot(
-                            request.parkId,
-                            request.maxCapacity,
-                            replyTo
-                    ),
+                    (ActorRef<ParkRegisteredMessage> replyTo) -> new ParkingLotManagerActor.RegisterLot(request.parkId, request.maxCapacity, request.lat, request.lng, replyTo),
                     ASK_TIMEOUT,
                     scheduler
             );
@@ -267,7 +263,9 @@ public class ParkingHttpServer {
                     status.getParkId(),
                     status.getCurrentOccupancy(),
                     status.getMaxCapacity(),
-                    status.getAvailableSpaces()
+                    status.getAvailableSpaces(),
+                    status.getLat(),
+                    status.getLng()
             ));
             return complete(HttpResponse.create()
                     .withStatus(StatusCodes.OK)
@@ -402,11 +400,11 @@ public class ParkingHttpServer {
     }
 
     // DTOs for HTTP requests/responses
-    public static class RegisterParkRequest { public String parkId; public int maxCapacity; }
+    public static class RegisterParkRequest { public String parkId; public int maxCapacity; public double lat; public double lng;}
     public static class RegisterParkResponse { public String parkId; public int maxCapacity; public String status; public RegisterParkResponse(String parkId, int maxCapacity, String status) { this.parkId = parkId; this.maxCapacity = maxCapacity; this.status = status; } }
     public static class OccupancyUpdateRequest { public String parkId; public int currentOccupancy; }
     public static class OccupancyUpdateResponse { public String status; public String parkId; public int currentOccupancy; public OccupancyUpdateResponse(String status, String parkId, int currentOccupancy) { this.status = status; this.parkId = parkId; this.currentOccupancy = currentOccupancy; } }
-    public static class ParkingLotStatusResponse { public String parkId; public int currentOccupancy; public int maxCapacity; public int availableSpaces; public ParkingLotStatusResponse(String parkId, int currentOccupancy, int maxCapacity, int availableSpaces) { this.parkId = parkId; this.currentOccupancy = currentOccupancy; this.maxCapacity = maxCapacity; this.availableSpaces = availableSpaces; } }
+    public static class ParkingLotStatusResponse {public String parkId;public int currentOccupancy;public int maxCapacity;public int availableSpaces;public double lat;public double lng;public ParkingLotStatusResponse(String parkId,int currentOccupancy,int maxCapacity,int availableSpaces,double lat,double lng) {this.parkId = parkId;this.currentOccupancy = currentOccupancy;this.maxCapacity = maxCapacity;this.availableSpaces = availableSpaces;this.lat = lat;this.lng = lng;}}
     public static class RegisteredParksResponse { public java.util.Map<String, Integer> parks; public RegisteredParksResponse(java.util.Map<String, Integer> parks) { this.parks = parks; } }
     public static class DeregisterParkResponse { public String parkId; public String status; public DeregisterParkResponse(String parkId, String status) { this.parkId = parkId; this.status = status; } }
     // Payment DTOs

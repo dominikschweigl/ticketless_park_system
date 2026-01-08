@@ -32,9 +32,10 @@ public class ParkingLotActor {
     }
 
     // Factory
-    public static Behavior<Command> create(String parkId, int maxCapacity) {
-        return Behaviors.setup(ctx -> new ParkingLotBehavior(ctx, parkId, maxCapacity).behavior());
+    public static Behavior<Command> create(String parkId, int maxCapacity, double lat, double lng) {
+        return Behaviors.setup(ctx -> new ParkingLotBehavior(ctx, parkId, maxCapacity, lat, lng).behavior());
     }
+
 
     // Internal behavior implementation
     private static class ParkingLotBehavior {
@@ -44,14 +45,18 @@ public class ParkingLotActor {
         private final int maxCapacity;
         private int currentOccupancy;
         private long lastUpdateTimestamp;
+        private final double lat;
+        private final double lng;
 
-        ParkingLotBehavior(ActorContext<Command> ctx, String parkId, int maxCapacity) {
+        ParkingLotBehavior(ActorContext<Command> ctx, String parkId, int maxCapacity, double lat, double lng) {
             this.ctx = ctx;
             this.parkId = parkId;
             this.maxCapacity = maxCapacity;
             this.currentOccupancy = 0;
             this.lastUpdateTimestamp = System.currentTimeMillis();
-            log.info("ParkingLotActor initialized for park {} with capacity {}", parkId, maxCapacity);
+            this.lat = lat;
+            this.lng = lng;
+            log.info("ParkingLotActor initialized for park {} cap {} at ({}, {})", parkId, maxCapacity, lat, lng);
         }
 
         Behavior<Command> behavior() {
@@ -77,7 +82,9 @@ public class ParkingLotActor {
                     parkId,
                     currentOccupancy,
                     maxCapacity,
-                    isFull
+                    isFull,
+                    lat,
+                    lng
             );
             msg.replyTo.tell(response);
             return Behaviors.same();

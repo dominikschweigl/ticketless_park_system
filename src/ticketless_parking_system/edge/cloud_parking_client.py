@@ -53,7 +53,9 @@ class CloudParkingClient:
     async def register_parking_lot(
         self,
         park_id: str,
-        max_capacity: int
+        max_capacity: int,
+        lat: float,
+        lng: float
     ) -> Dict[str, Any]:
         """
         Register a new parking lot with the cloud system.
@@ -71,7 +73,9 @@ class CloudParkingClient:
         url = f"{self.base_url}/api/parking-lots"
         data = {
             "parkId": park_id,
-            "maxCapacity": max_capacity
+            "maxCapacity": max_capacity,
+            "lat": lat, 
+            "lng": lng
         }
 
         logger.info(f"Registering parking lot {park_id} (capacity: {max_capacity})")

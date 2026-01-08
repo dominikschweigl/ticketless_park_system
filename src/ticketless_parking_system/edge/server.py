@@ -21,6 +21,8 @@ DB_PATH = os.environ.get("DB_PATH", "parking.db")
 CAR_PARK_ID = os.environ.get("CAR_PARK_ID", "lot-01")
 CAR_PARK_CAPACITY = int(os.environ.get("CAR_PARK_CAPACITY", "67"))
 CLOUD_URL = os.environ.get("CLOUD_URL", "http://parking-system-cloud:8080")
+CAR_PARK_LAT = float(os.environ.get("CAR_PARK_LAT", "47.264947230784486"))
+CAR_PARK_LNG = float(os.environ.get("CAR_PARK_LNG", "11.343537320891627"))
 
 # NATS URLs: separate local (edge) vs cloud
 EDGE_NATS_URL = os.environ.get("EDGE_NATS_URL", "nats://localhost:4222")
@@ -159,8 +161,11 @@ async def main():
     tracker = ParkingLotTracker(
         cloud_client=cloud_client,
         park_id=CAR_PARK_ID,
-        max_capacity=CAR_PARK_CAPACITY
+        max_capacity=CAR_PARK_CAPACITY,
+        lat=CAR_PARK_LAT,
+        lng=CAR_PARK_LNG
     )
+
 
     # Register parking lot with cloud
     try:
