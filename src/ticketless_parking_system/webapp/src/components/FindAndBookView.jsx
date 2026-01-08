@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Navigation } from 'lucide-react';
-import { getRegisteredParkingLots, getParkingLotStatus, createBooking } from "../services/parkingApi";
+import React, { useState, useEffect, useMemo } from "react";
+import { Search, MapPin, Navigation } from "lucide-react";
+import {
+  getRegisteredParkingLots,
+  getParkingLotStatus,
+  createBooking,
+} from "../services/parkingApi";
 
 // --- DEPENDENCIES (Included inline for preview compatibility) ---
 // In your local project, you should import these from their respective files:
 // import { Button } from './ui/Button';
 // import { Card } from './ui/Card';
-// import { mockApi } from '../services/mockApi';
 
 const Button = ({
   children,
@@ -20,10 +23,12 @@ const Button = ({
   const baseStyles =
     "px-4 py-2 rounded-md font-medium transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-1";
   const variants = {
-    primary: "bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500 shadow-sm",
+    primary:
+      "bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500 shadow-sm",
     secondary:
       "bg-slate-100 hover:bg-slate-200 text-slate-700 focus:ring-slate-400 border border-slate-200",
-    success: "bg-emerald-600 hover:bg-emerald-700 text-white focus:ring-emerald-500 shadow-sm",
+    success:
+      "bg-emerald-600 hover:bg-emerald-700 text-white focus:ring-emerald-500 shadow-sm",
     danger: "bg-red-500 hover:bg-red-600 text-white focus:ring-red-500",
     ghost: "bg-transparent hover:bg-slate-100 text-slate-600",
   };
@@ -45,17 +50,16 @@ const Button = ({
   );
 };
 
-
 const Card = ({ title, children, className = "", footer }) => (
-  <div className={`bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden ${className}`}>
+  <div
+    className={`bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden ${className}`}
+  >
     {title && (
       <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
         <h3 className="text-xl font-semibold text-slate-800">{title}</h3>
       </div>
     )}
-    <div className="p-6">
-      {children}
-    </div>
+    <div className="p-6">{children}</div>
     {footer && (
       <div className="bg-slate-50 px-6 py-4 border-t border-slate-100">
         {footer}
@@ -63,15 +67,36 @@ const Card = ({ title, children, className = "", footer }) => (
     )}
   </div>
 );
-// ----------------------------------------------------------------
+
+// --- distance helper ---
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371; // km
+  const toRad = (d) => (d * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
 
 export const FindAndBookView = ({ showNotification }) => {
-  const [lots, setLots] = useState([]);
+  const [lotsRaw, setLotsRaw] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [selectedLot, setSelectedLot] = useState(null);
-  const [bookingPlate, setBookingPlate] = useState('');
+  const [bookingPlate, setBookingPlate] = useState("");
   const [bookingLoading, setBookingLoading] = useState(false);
 
+  const [userLoc, setUserLoc] = useState(null); // { lat, lng } | null
+
+  // 1) load lots (no sorting here)
   useEffect(() => {
     let alive = true;
 
@@ -79,31 +104,29 @@ export const FindAndBookView = ({ showNotification }) => {
       try {
         setLoading(true);
 
-        // 1) get IDs
         const reg = await getRegisteredParkingLots();
-        const parks = reg.parks || {}; // { "lot-01": 50, ... }
+        const parks = reg.parks || {};
         const ids = Object.keys(parks);
 
-        // 2) fetch each status (simple parallel)
-        const statuses = await Promise.all(
-          ids.map((id) => getParkingLotStatus(id))
-        );
+        const statuses = await Promise.all(ids.map((id) => getParkingLotStatus(id)));
 
-        // 3) map to what your UI expects
         const uiLots = statuses.map((s) => ({
           id: s.parkId,
-          name: s.parkId,               // no name in backend -> show id
-          address: "",                  // backend doesn’t provide it
+          name: s.parkId,
+          address: "",
           total: s.maxCapacity,
           free: s.availableSpaces,
-          price: 4.5,                   // backend doesn’t provide -> hardcode for now
-          dist: "",                      // backend doesn’t provide
+          price: 4.5,
+          dist: "",
+          lat: typeof s.lat === "number" ? s.lat : 0,
+          lng: typeof s.lng === "number" ? s.lng : 0,
         }));
 
-        if (alive) setLots(uiLots);
+        if (alive) setLotsRaw(uiLots);
       } catch (e) {
         console.error(e);
-        if (showNotification) showNotification("error", e.message || "Failed to load parking lots");
+        if (showNotification)
+          showNotification("error", e.message || "Failed to load parking lots");
       } finally {
         if (alive) setLoading(false);
       }
@@ -112,34 +135,88 @@ export const FindAndBookView = ({ showNotification }) => {
     return () => {
       alive = false;
     };
+  }, [showNotification]);
+
+  // 2) get user location once
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      (err) => {
+        console.warn("Geolocation denied/unavailable:", err);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
   }, []);
 
+  // 3) compute distances + sort (derived)
+  const lots = useMemo(() => {
+    // no GPS => just return as-is
+    if (!userLoc) return lotsRaw;
 
-    const handleBook = async (e) => {
-      e.preventDefault();
-      if (!bookingPlate || !selectedLot) return;
+    return lotsRaw
+      .map((lot) => {
+        const hasCoords =
+          typeof lot.lat === "number" &&
+          typeof lot.lng === "number" &&
+          !(lot.lat === 0 && lot.lng === 0);
 
-      setBookingLoading(true);
-      try {
-        const res = await createBooking(selectedLot.id, bookingPlate);
-
-        if (showNotification) {
-          showNotification(
-            "success",
-            `Booked ${res.parkId} for ${res.licensePlate} (${res.status})`
-          );
+        if (!hasCoords) {
+          return { ...lot, distKm: Number.POSITIVE_INFINITY, dist: "" };
         }
 
-        setSelectedLot(null);
-        setBookingPlate("");
-        // optional: reload lots so availability updates
-        // await loadLots();
-      } catch (err) {
-        console.error(err);
-        if (showNotification) showNotification("error", err.message || "Booking failed");
-      } finally {
-        setBookingLoading(false);
+        const km = haversineKm(userLoc.lat, userLoc.lng, lot.lat, lot.lng);
+        return { ...lot, distKm: km, dist: `${km.toFixed(1)} km` };
+      })
+      .sort((a, b) => (a.distKm ?? 0) - (b.distKm ?? 0));
+  }, [lotsRaw, userLoc]);
+
+
+  
+  const openRoute = (lot) => {
+    const hasCoords =
+      lot &&
+      typeof lot.lat === "number" &&
+      typeof lot.lng === "number" &&
+      !(lot.lat === 0 && lot.lng === 0);
+
+    if (!hasCoords) {
+      if (showNotification)
+        showNotification("error", "No coordinates for this parking lot yet.");
+      return;
+    }
+
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${lot.lat},${lot.lng}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleBook = async (e) => {
+    e.preventDefault();
+    if (!bookingPlate || !selectedLot) return;
+
+    setBookingLoading(true);
+    try {
+      const res = await createBooking(selectedLot.id, bookingPlate);
+
+      if (showNotification) {
+        showNotification(
+          "success",
+          `Booked ${res.parkId} for ${res.licensePlate} (${res.status})`
+        );
       }
+
+      setSelectedLot(null);
+      setBookingPlate("");
+    } catch (err) {
+      console.error(err);
+      if (showNotification)
+        showNotification("error", err.message || "Booking failed");
+    } finally {
+      setBookingLoading(false);
+    }
   };
 
   return (
@@ -149,10 +226,11 @@ export const FindAndBookView = ({ showNotification }) => {
           <h2 className="text-3xl font-bold text-slate-800">Find Parking</h2>
           <p className="text-slate-500">Real-time capacity and reservations.</p>
         </div>
+
         <div className="relative w-full md:w-96">
-          <input 
-            type="text" 
-            placeholder="Search destination..." 
+          <input
+            type="text"
+            placeholder="Search destination..."
             className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
           />
           <Search className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
@@ -161,62 +239,96 @@ export const FindAndBookView = ({ showNotification }) => {
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1,2,3].map(i => (
-            <div key={i} className="h-64 bg-slate-100 rounded-lg animate-pulse"></div>
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-64 bg-slate-100 rounded-lg animate-pulse"
+            ></div>
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* List of Lots */}
           <div className="lg:col-span-2 space-y-4">
-            {lots.map(lot => {
+            {lots.map((lot) => {
               const occupancy = Math.round(((lot.total - lot.free) / lot.total) * 100);
               const isFull = lot.free === 0;
-              
+
               return (
-                <div key={lot.id} className="bg-white p-5 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                <div
+                  key={lot.id}
+                  className="bg-white p-5 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition-shadow"
+                >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-bold text-slate-800">{lot.name}</h3>
+                        <h3 className="text-lg font-bold text-slate-800">
+                          {lot.name}
+                        </h3>
                         {lot.free > 0 && lot.free < 10 && (
-                          <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-medium">High Demand</span>
+                          <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-medium">
+                            High Demand
+                          </span>
                         )}
                       </div>
+
                       <p className="text-slate-500 text-sm flex items-center gap-1 mt-1">
-                        <MapPin className="h-3 w-3" /> {lot.address} • {lot.dist} away
+                        <MapPin className="h-3 w-3" />
+                        {lot.dist ? `${lot.dist} away` : "distance unknown"}
                       </p>
                     </div>
+
                     <div className="text-right">
-                      <span className="block text-xl font-bold text-slate-800">${lot.price.toFixed(2)}<span className="text-sm font-normal text-slate-500">/hr</span></span>
+                      <span className="block text-xl font-bold text-slate-800">
+                        ${lot.price.toFixed(2)}
+                        <span className="text-sm font-normal text-slate-500">
+                          /hr
+                        </span>
+                      </span>
                     </div>
                   </div>
 
                   <div className="mt-4">
                     <div className="flex justify-between text-sm mb-1">
-                      <span className={`font-medium ${isFull ? 'text-red-600' : 'text-slate-600'}`}>
-                        {isFull ? 'Full' : `${lot.free} spots available`}
+                      <span
+                        className={`font-medium ${
+                          isFull ? "text-red-600" : "text-slate-600"
+                        }`}
+                      >
+                        {isFull ? "Full" : `${lot.free} spots available`}
                       </span>
                       <span className="text-slate-400">{occupancy}% Full</span>
                     </div>
+
                     <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                      <div 
-                        className={`h-2.5 rounded-full ${isFull ? 'bg-red-500' : occupancy > 80 ? 'bg-orange-400' : 'bg-green-500'}`} 
+                      <div
+                        className={`h-2.5 rounded-full ${
+                          isFull
+                            ? "bg-red-500"
+                            : occupancy > 80
+                            ? "bg-orange-400"
+                            : "bg-green-500"
+                        }`}
                         style={{ width: `${occupancy}%` }}
                       ></div>
                     </div>
                   </div>
 
                   <div className="mt-5 flex gap-3">
-                    <Button 
-                      variant="primary" 
-                      className="flex-1" 
+                    <Button
+                      variant="primary"
+                      className="flex-1"
                       disabled={isFull}
                       onClick={() => setSelectedLot(lot)}
                     >
-                      {isFull ? 'Waitlist' : 'Book Spot'}
+                      {isFull ? "Waitlist" : "Book Spot"}
                     </Button>
-                    <Button variant="secondary" className="flex-1">
+
+                    <Button
+                      variant="secondary"
+                      className="flex-1"
+                      onClick={() => openRoute(lot)}
+                    >
                       <Navigation className="h-4 w-4" /> Route
                     </Button>
                   </div>
@@ -225,35 +337,46 @@ export const FindAndBookView = ({ showNotification }) => {
             })}
           </div>
 
-          {/* Selected Booking Panel (Sticky on Desktop) */}
+          {/* Selected Booking Panel */}
           <div className="lg:col-span-1">
             <div className="sticky top-6">
               {selectedLot ? (
-                <Card title="Complete Booking" className="border-t-4 border-t-blue-600 animate-slideUp">
+                <Card
+                  title="Complete Booking"
+                  className="border-t-4 border-t-blue-600 animate-slideUp"
+                >
                   <div className="space-y-4">
                     <div>
                       <p className="text-sm text-slate-500">Location</p>
                       <p className="font-medium text-slate-800">{selectedLot.name}</p>
                     </div>
+
                     <div>
                       <p className="text-sm text-slate-500">Rate</p>
-                      <p className="font-medium text-slate-800">${selectedLot.price.toFixed(2)} / hour</p>
+                      <p className="font-medium text-slate-800">
+                        ${selectedLot.price.toFixed(2)} / hour
+                      </p>
                     </div>
-                    
+
                     <form onSubmit={handleBook} className="space-y-4 pt-2">
-                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Plate Number</label>
-                        <input 
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Plate Number
+                        </label>
+                        <input
                           required
-                          type="text" 
-                          className="w-full border border-slate-300 rounded-md p-2 uppercase font-mono"
+                          type="text"
+                          className="w-full border border-slate-300 rounded-md p-2 font-mono"
                           placeholder="ABC-1234"
                           value={bookingPlate}
-                          onChange={e => setBookingPlate(e.target.value.toUpperCase())}
+                          onChange={(e) => setBookingPlate(e.target.value)}
                         />
                       </div>
+
                       <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Duration (Est.)</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Duration (Est.)
+                        </label>
                         <select className="w-full border border-slate-300 rounded-md p-2 bg-white">
                           <option>1 Hour</option>
                           <option>2 Hours</option>
@@ -261,10 +384,23 @@ export const FindAndBookView = ({ showNotification }) => {
                           <option>All Day</option>
                         </select>
                       </div>
-                      
+
                       <div className="flex gap-2 pt-2">
-                        <Button type="submit" loading={bookingLoading} className="flex-1" variant="success">Confirm</Button>
-                        <Button onClick={() => setSelectedLot(null)} type="button" variant="secondary">Cancel</Button>
+                        <Button
+                          type="submit"
+                          loading={bookingLoading}
+                          className="flex-1"
+                          variant="success"
+                        >
+                          Confirm
+                        </Button>
+                        <Button
+                          onClick={() => setSelectedLot(null)}
+                          type="button"
+                          variant="secondary"
+                        >
+                          Cancel
+                        </Button>
                       </div>
                     </form>
                   </div>
@@ -272,7 +408,9 @@ export const FindAndBookView = ({ showNotification }) => {
               ) : (
                 <div className="bg-slate-50 rounded-lg border border-dashed border-slate-300 p-8 text-center">
                   <MapPin className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500">Select a parking lot from the list to reserve a spot.</p>
+                  <p className="text-slate-500">
+                    Select a parking lot from the list to reserve a spot.
+                  </p>
                 </div>
               )}
             </div>
