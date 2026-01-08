@@ -24,6 +24,7 @@
 
 \section{Introduction}
 This project implements a distributed parking system that captures the license plate of incoming and leaving vehicles at the gates of a car park. These detections are used to be able to pay only with one's license plate number at the payment station. With this system it is possible to allow customers to pay without tickets. Instead, customers pay from their smartphones in the web or at payment stations using their license plate number. In addition, the web app allows customers to view car parks with open spaces and book a parking spot in advance.
+Adding to basic availability and booking functionality, the web application also supports location-aware parking discovery.
 
 The dataset we will use is the Car License Plate Detection dataset from Kaggle. It features more than 400 images of car front/ rear views with clearly visible license plates. For a real system one would fine tune a corresponding detection model on the specific surroundings and camera angle of the actual entries to the parking space. We will use a precrafted YOLOv11 license plate detection model  for this project.
 
@@ -45,8 +46,7 @@ using the web application or the local payment station using their license plate
 A diagram of these components can be seen in Figure~\ref{fig:architecture_diagram}.
 
 The cloud will receive updates from the edge servers on their current open capacity.
-This information allows to compute the nearest free parking spots for any destination
-a customer has. The customer can also book a parking spot in advance for a given
+The customer can also book a parking spot in advance for a given
 car park, which sends an event to the corresponding edge server to reserve a spot
 for the car with the customers license plate.
 
@@ -67,16 +67,20 @@ The camera is simulated by continuously sending images from the license plate de
 
 We plan to simulate the gates and traffic lights with a python program that visualizes their state with a library like Tkinter or similar a library.
 
-For the web interface, we implemented a web application
-using React. This allows us to simulate a real-world scenario
-where customers use their smartphones or a kiosk to inter-
-act with the system. The user interface was designed with
-Tailwind CSS to ensure it is easy to use and responsive on
-different screen sizes. Through this web app, users can check
-for available parking spots in real-time, reserve a space in
-advance, and pay their parking fees by simply entering their
-license plate number, which triggers the necessary validation
-checks in our backend.
+For the web interface, we implemented a web application using React that allows
+users to interact with the parking system. Through this application, users can
+see all registered parking lots, check their current availability, reserve
+a parking space in advance by entering their license plate number and pay. The interface
+was built with Tailwind CSS to provide a responsive layout that works well on
+both mobile devices and desktop browsers.
+
+To help users find a suitable parking lot, the application can access the
+current location of the client device using the browser’s geolocation feature.
+Each parking lot is provided by the backend together with its geographical
+coordinates. Based on this information, the application calculates the distance
+between the user and each parking lot and sorts the results so that nearby
+parking options are shown first. A routing button is also provided, which opens
+a navigation view in an external map service for the selected parking lot.
 
 \subsection{Edge Implementation}
 
@@ -123,6 +127,11 @@ while NATS for cloud-to-edge booking events decouples producers and consumers an
 management. Finally, placing state where it belongs—lot occupancy inside ParkingLot actors, payment sessions inside the Payment actor,
 and booking mediation inside the Booking actor—minimizes side effects and keeps responsibilities clear.
 
+Each ParkingLot actor additionally stores static metadata describing the physical
+location of the car park in the form of latitude and longitude. These coordinates
+are provided during parking-lot registration and are returned as part of the lot
+status via the HTTP API. This allows clients to perform distance calculations and
+routing without requiring external geocoding services.
 
 \section{Evaluation}
 Stress your application to prove the correctness of your implementation, be aware of its main limitations. Explain first the experiments done (e.g., vary the number of input events), then introduce and discuss the results obtained.
