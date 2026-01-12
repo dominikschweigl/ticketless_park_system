@@ -15,12 +15,14 @@ The camera simulation module (`camera.py`) is responsible for generating realist
 The camera simulator operates with two independent camera streams:
 
 #### Entry Camera
+
 - Continuously cycles through car images from the license plate detection dataset
 - Displays each car image for a fixed duration (`DISPLAY_TIME = 5.0` seconds)
 - Alternates between showing a car and an empty street scene
 - Publishes frames to the `camera.entry` NATS subject at regular intervals
 
 #### Exit Camera
+
 - Monitors the entry stream and maintains consistency with it
 - Only shows cars leaving that have previously entered through the entry camera
 - Uses a probabilistic model to determine when cars exit
@@ -71,6 +73,7 @@ This project uses Docker and Docker Compose to orchestrate multiple services: th
 ### Services
 
 #### NATS Message Broker
+
 - **Image**: nats:2.10
 - **Role**: Central message queue for inter-service communication
 - **Ports**:
@@ -79,15 +82,17 @@ This project uses Docker and Docker Compose to orchestrate multiple services: th
 - **Network**: parking-net (bridge network)
 
 #### Camera Simulator
+
 - **Role**: Simulates camera streams at parking entry/exit points
 - **Dockerfile**: Located at `src/ticketless_parking_system/IoT/camera/dockerfile`
-- **Environment**: 
+- **Environment**:
   - `NATS_URL=nats://nats:4222`
 - **Dependencies**: Requires NATS service to be running
 - **Data Volume**: Mounts `./data` directory for car and empty street images
 - **Network**: parking-net (bridge network)
 
 #### Edge Server
+
 - **Role**: Processes video streams and detects license plates
 - **Dockerfile**: Located at `src/ticketless_parking_system/edge/dockerfile`
 - **Environment**:
@@ -95,7 +100,7 @@ This project uses Docker and Docker Compose to orchestrate multiple services: th
 - **Dependencies**: Requires NATS service to be running
 - **Network**: parking-net (bridge network)
 
-Can also be run locally with the following command and assuming that the nast and camera containers are running. 
+Can also be run locally with the following command and assuming that the nast and camera containers are running.
 
 ```
 NATS_URL=nats://localhost:4222 DETECTION_MODEL_PATH="./src/ticketless_parking_system/edge/yolov11s-license-plate.pt" uv run src/ticketless_parking_system/edge/server.py
@@ -144,4 +149,69 @@ docker-compose ps
 # Check container logs
 docker logs camera-simulator
 docker logs edge-server
+```
+
+## AWS Deployment with Terraform
+
+### Prerequisites
+
+1. AWS CLI configured with credentials (`aws configure`)
+2. Terraform installed (`terraform --version`)
+3. EC2 key pair created in AWS and private key saved locally
+4. Built artifacts:
+   - Akka JAR: `src/ticketless_parking_system/cloud/target/parking-system-1.0-SNAPSHOT.jar`
+   - Webapp: `src/ticketless_parking_system/webapp/dist/`
+
+### Build Steps
+
+```bash
+# Build Akka application (requires Java 17+ and Maven)
+cd src/ticketless_parking_system/cloud
+mvn clean package
+cd ../../..
+
+# Build webapp (requires Node.js and npm)
+cd src/ticketless_parking_system/webapp
+npm install
+npm run build
+cd ../../..
+```
+
+### Deploy
+
+```bash
+# Initialize Terraform
+terraform init
+
+# Create terraform.tfvars file
+cat > terraform.tfvars <<EOF
+key_name = "your-ec2-key-name"
+aws_region = "us-east-1"
+EOF
+
+# Ensure SSH key is accessible
+# The key should be at ~/.ssh/your-ec2-key-name.pem
+
+# Review deployment plan
+terraform plan
+
+# Deploy infrastructure
+terraform apply
+
+# Get public IPs
+terraform output
+```
+
+### Access Services
+
+After deployment completes:
+
+- **Akka API**: `http://<akka_app_public_ip>:8080/api/parking-lots`
+- **NATS**: `nats://<nats_public_ip>:4222` (for edge servers)
+- **Webapp**: `http://<webapp_public_ip>`
+
+### Cleanup
+
+```bash
+terraform destroy
 ```
