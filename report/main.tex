@@ -154,6 +154,11 @@ This setup may not handle high traffic loads or provide sufficient fault toleran
 In a production environment, deploying the backend using container orchestration platforms like Amazon ECS
 along with load balancers and auto-scaling, would improve reliability and scalability.
 
+The deployment should be better automated. Currently the setup of the cloud is done using terraform, but 
+the web application bundle and the Akka backend Jar file need to be manually created and pushed to an S3 bucket.
+A more automated CI/CD pipeline using AWS CodePipeline or similar services would streamline deployments and reduce manual
+effort and lower the risk of human error.
+
 \section{Evaluation}
 Stress your application to prove the correctness of your implementation, be aware of its main limitations. Explain first the experiments done (e.g., vary the number of input events), then introduce and discuss the results obtained.
 
