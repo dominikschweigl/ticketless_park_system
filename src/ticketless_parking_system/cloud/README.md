@@ -178,7 +178,10 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/parking-system:late
         }
       },
       "healthCheck": {
-        "command": ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"],
+        "command": [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"
+        ],
         "interval": 30,
         "timeout": 5,
         "retries": 3,
@@ -191,41 +194,52 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/parking-system:late
 
 ## API Endpunkte
 
-| Method | Endpoint | Beschreibung |
-|--------|----------|--------------|
-| GET | `/health` | Health Check |
-| GET | `/api/parking-lots` | Alle registrierten Parkplätze abrufen |
-| POST | `/api/parking-lots` | Parking Lot registrieren |
-| POST | `/api/occupancy` | Occupancy Update senden |
-| GET | `/api/parking-lots/{id}` | Status eines spezifischen Parkplatzes abfragen |
-| DELETE | `/api/parking-lots/{id}` | Parking Lot deregistrieren |
+| Method | Endpoint                              | Beschreibung                                        |
+| ------ | ------------------------------------- | --------------------------------------------------- |
+| GET    | `/health`                             | Health Check                                        |
+| GET    | `/api/parking-lots`                   | Alle registrierten Parkplätze abrufen               |
+| POST   | `/api/parking-lots`                   | Parking Lot registrieren                            |
+| GET    | `/api/parking-lots/{id}`              | Status eines spezifischen Parkplatzes abfragen      |
+| DELETE | `/api/parking-lots/{id}`              | Parking Lot deregistrieren                          |
+| POST   | `/api/occupancy`                      | Occupancy Update senden                             |
+| POST   | `/api/bookings`                       | Parkplatz buchen                                    |
+| DELETE | `/api/bookings`                       | Buchung stornieren                                  |
+| POST   | `/api/payment/enter`                  | Fahrzeugeinfahrt registrieren (Startzeit speichern) |
+| POST   | `/api/payment/pay`                    | Parkgebühr bezahlen                                 |
+| GET    | `/api/payment/check?licensePlate=XYZ` | Zahlungsstatus beim Verlassen prüfen                |
+| DELETE | `/api/payment/exit?licensePlate=XYZ`  | Zahlungsdatensatz nach Ausfahrt löschen             |
 
 ## Core Components
 
 ### ParkingLotManagerActor
 
 Supervises all `ParkingLotActor` instances and handles:
+
 - **RegisterParkMessage**: Register new parking lot from edge servers
 - **GetRegisteredParksMessage**: Get list of all registered parking lots
 - **OccupancyMessage**: Route occupancy update to appropriate lot
 - **GetStatusMessage**: Query parking lot status
 
 Maintains:
+
 - Map of parkId → ParkingLotActor reference
 - Map of parkId → maxCapacity
 
 ### ParkingLotActor
 
 Manages a single parking lot. Tracks:
+
 - Current occupancy (number of cars measured by edge server sensors)
 - Maximum capacity
 - Last update timestamp and source edge server ID
 
 **Handled Messages:**
+
 - `OccupancyMessage`: Receives occupancy from edge server sensors
 - `GetStatusMessage`: Returns current status immediately
 
 **State Model:**
+
 - Simple mirror of what edge server measures via sensors
 - No counting arrivals/departures
 - No need for periodic broadcasts (edge server controls update frequency)
@@ -260,11 +274,11 @@ Create a new class extending `CarParkMessage`:
 ```java
 public class ReserveSpaceMessage extends CarParkMessage {
     private final String reservationId;
-    
+
     public ReserveSpaceMessage(String reservationId) {
         this.reservationId = reservationId;
     }
-    
+
     public String getReservationId() {
         return reservationId;
     }
@@ -298,11 +312,11 @@ Create a new class extending `CarParkMessage`:
 ```java
 public class ReserveSpaceMessage extends CarParkMessage {
     private final String reservationId;
-    
+
     public ReserveSpaceMessage(String reservationId) {
         this.reservationId = reservationId;
     }
-    
+
     public String getReservationId() {
         return reservationId;
     }
@@ -337,6 +351,7 @@ Configured using Logback. Log levels can be adjusted in `logback.xml`:
 - `ERROR`: Error messages
 
 Logs are written to:
+
 - Console (stdout)
 - File: `${LOG_PATH}/spring.log` (rotated daily, max 1GB total)
 
