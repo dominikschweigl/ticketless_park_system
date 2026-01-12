@@ -133,6 +133,27 @@ are provided during parking-lot registration and are returned as part of the lot
 status via the HTTP API. This allows clients to perform distance calculations and
 routing without requiring external geocoding services.
 
+For the web application, we implemented a web application using React that allows
+users to interact with the parking system. Through this application, users can
+see all registered parking lots, check their current availability, reserve
+a parking space in advance by entering their license plate number and pay.
+We host the web application on a separate EC2 instance from the Akka backend
+using Nginx as a web server.
+
+\section{Limitations}
+
+While the implemented system covers the core functionality of a video license plate parking system, there are several limitations to consider.
+
+One major limitation is the missing authentication and authorization mechanisms. Currently,
+there is no mechanism to verify the identity of parking lot servers when they register with the cloud backend
+or when they send occupancy updates. This could lead to unauthorized entities
+manipulating parking lot data. Implementing secure authentication, such as mutual TLS or API keys, would be necessary for a production system.
+
+Another big limitation is the simplistic hosting setup. The Akka backend is hosted on a single EC2 instance without any load balancing or auto-scaling.
+This setup may not handle high traffic loads or provide sufficient fault tolerance.
+In a production environment, deploying the backend using container orchestration platforms like Amazon ECS
+along with load balancers and auto-scaling, would improve reliability and scalability.
+
 \section{Evaluation}
 Stress your application to prove the correctness of your implementation, be aware of its main limitations. Explain first the experiments done (e.g., vary the number of input events), then introduce and discuss the results obtained.
 
