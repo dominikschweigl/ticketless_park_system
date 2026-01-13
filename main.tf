@@ -37,15 +37,18 @@ variable "webapp_dist_path" {
 variable "akka_jar_path" {
   description = "Local path to the built Akka JAR file"
   type        = string
-  default     = "src/ticketless_parking_system/cloud/target/parking-system-1.0-SNAPSHOT.jar"
+  default     = "src/ticketless_parking_system/cloud/target/parking-system.jar"
 }
 
 data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnet_ids" "default" {
-  vpc_id = data.aws_vpc.default.id
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 data "aws_ami" "al2023" {
@@ -124,7 +127,7 @@ locals {
 resource "aws_instance" "akka_app" {
   ami                         = data.aws_ami.al2023.id
   instance_type               = var.instance_type
-  subnet_id                   = data.aws_subnet_ids.default.ids[0]
+  subnet_id                   = data.aws_subnets.default.ids[0]
   vpc_security_group_ids      = [aws_security_group.parking_sg.id]
   key_name                    = var.key_name
   associate_public_ip_address = true
@@ -151,27 +154,32 @@ resource "aws_instance" "akka_app" {
 
   provisioner "remote-exec" {
     inline = [
+      "timeout 120 bash -c 'until [ -f /tmp/parking-system.jar ]; do sleep 2; done'",
+      "sudo mkdir -p /opt/akka-app",
       "sudo mv /tmp/parking-system.jar /opt/akka-app/parking-system.jar",
       "sudo chown root:root /opt/akka-app/parking-system.jar",
-      "sudo cat > /tmp/parking-system.service <<'EOT'",
-      "[Unit]",
-      "Description=Parking System Akka Application",
-      "After=network.target",
-      "",
-      "[Service]",
-      "Type=simple",
-      "User=ec2-user",
-      "WorkingDirectory=/opt/akka-app",
-      "Environment=\"NATS_URL=nats://${aws_instance.nats.private_ip}:4222\"",
-      "Environment=\"HTTP_HOST=0.0.0.0\"",
-      "Environment=\"HTTP_PORT=8080\"",
-      "ExecStart=/usr/bin/java -jar /opt/akka-app/parking-system.jar",
-      "Restart=always",
-      "RestartSec=10",
-      "",
-      "[Install]",
-      "WantedBy=multi-user.target",
-      "EOT",
+      <<-EOT
+      sudo cat > /tmp/parking-system.service <<'SVCEOF'
+      [Unit]
+      Description=Parking System Akka Application
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=ec2-user
+      WorkingDirectory=/opt/akka-app
+      Environment="NATS_URL=nats://${aws_instance.nats.private_ip}:4222"
+      Environment="HTTP_HOST=0.0.0.0"
+      Environment="HTTP_PORT=8080"
+      ExecStart=/usr/bin/java -jar /opt/akka-app/parking-system.jar
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+      SVCEOF
+      EOT
+      ,
       "sudo mv /tmp/parking-system.service /etc/systemd/system/parking-system.service",
       "sudo systemctl daemon-reload",
       "sudo systemctl enable parking-system",
@@ -185,7 +193,7 @@ resource "aws_instance" "akka_app" {
 resource "aws_instance" "nats" {
   ami                         = data.aws_ami.al2023.id
   instance_type               = var.instance_type
-  subnet_id                   = data.aws_subnet_ids.default.ids[0]
+  subnet_id                   = data.aws_subnets.default.ids[0]
   vpc_security_group_ids      = [aws_security_group.parking_sg.id]
   key_name                    = var.key_name
   associate_public_ip_address = true
@@ -206,7 +214,7 @@ resource "aws_instance" "nats" {
 resource "aws_instance" "webapp" {
   ami                         = data.aws_ami.al2023.id
   instance_type               = var.instance_type
-  subnet_id                   = data.aws_subnet_ids.default.ids[0]
+  subnet_id                   = data.aws_subnets.default.ids[0]
   vpc_security_group_ids      = [aws_security_group.parking_sg.id]
   key_name                    = var.key_name
   associate_public_ip_address = true
@@ -225,6 +233,15 @@ resource "aws_instance" "webapp" {
     user        = "ec2-user"
     private_key = file("~/.ssh/${var.key_name}.pem")
     host        = self.public_ip
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "mkdir -p /tmp/webapp",
+      "echo 'Waiting for nginx installation...'",
+      "timeout 300 bash -c 'until systemctl is-active nginx; do sleep 5; done'",
+      "echo 'Nginx is ready'"
+    ]
   }
 
   provisioner "file" {

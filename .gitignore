@@ -235,3 +235,9 @@ latexmkrc
 
 # Detection Models
 *.pt
+
+# Terraform files
+*.tfvars
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
