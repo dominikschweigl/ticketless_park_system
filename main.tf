@@ -254,6 +254,14 @@ resource "aws_instance" "webapp" {
       "sudo rm -rf /usr/share/nginx/html/*",
       "sudo cp -r /tmp/webapp/* /usr/share/nginx/html/",
       "sudo chown -R nginx:nginx /usr/share/nginx/html",
+      
+      # ✅ Add runtime config.js for frontend to know Akka backend URL
+      <<-EOT
+      sudo tee /usr/share/nginx/html/config.js > /dev/null <<EOF
+      window.APP_CONFIG = { API_BASE_URL: "http://${aws_instance.akka_app.public_ip}:8080" };
+      EOF
+      EOT
+      ,
       "sudo systemctl restart nginx"
     ]
   }
