@@ -1,0 +1,71 @@
+services:
+  nats:
+    image: nats:2.10
+    container_name: nats-graz
+    restart: always
+    ports:
+      - "4224:4222"
+      - "8224:8222"
+    command: ["-js", "-m", "8222"]
+    networks: [parking-graz]
+
+  camera:
+    build:
+      context: ./src/ticketless_parking_system/IoT/camera
+    container_name: camera-graz
+    restart: always
+    environment:
+      - NATS_URL=nats://nats:4222
+      - CAR_PARK_ID=Parking_Graz
+      - CAMERA_ID=graz_0
+    depends_on: [nats]
+    networks: [parking-graz]
+    volumes:
+      - ./data:/app/data
+
+  barrier-entry:
+    build:
+      context: ./src/ticketless_parking_system/IoT/barrier
+    container_name: barrier-entry-graz
+    restart: always
+    environment:
+      - NATS_URL=nats://nats:4222
+      - BARRIER_ID=entry_graz_0
+    depends_on: [nats]
+    networks: [parking-graz]
+
+  barrier-exit:
+    build:
+      context: ./src/ticketless_parking_system/IoT/barrier
+    container_name: barrier-exit-graz
+    restart: always
+    environment:
+      - NATS_URL=nats://nats:4222
+      - BARRIER_ID=exit_graz_0
+    depends_on: [nats]
+    networks: [parking-graz]
+
+  edge:
+    build:
+      context: ./src/ticketless_parking_system/edge
+    container_name: edge-graz
+    restart: always
+    environment:
+      - EDGE_NATS_URL=nats://nats:4222
+      - CLOUD_URL=http://54.243.10.60:8080
+      - CLOUD_NATS_URL=nats://3.87.211.209:4222
+      - DB_PATH=/app/data/parking.db
+      - CAR_PARK_ID=Parking_Graz
+      - CAR_PARK_LAT=47.076668
+      - CAR_PARK_LNG=15.421371
+    depends_on: [nats, camera, barrier-entry, barrier-exit]
+    networks: [parking-graz]
+    volumes:
+      - edge-db-graz:/app/data
+
+networks:
+  parking-graz:
+    driver: bridge
+
+volumes:
+  edge-db-graz:
