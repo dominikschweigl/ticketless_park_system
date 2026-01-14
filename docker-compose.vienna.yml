@@ -1,71 +1,71 @@
 services:
   nats:
     image: nats:2.10
-    container_name: nats-graz
+    container_name: nats-vienna
     restart: always
     ports:
-      - "4224:4222"
-      - "8224:8222"
+      - "4223:4222"
+      - "8223:8222"
     command: ["-js", "-m", "8222"]
-    networks: [parking-graz]
+    networks: [parking-vienna]
 
   camera:
     build:
       context: ./src/ticketless_parking_system/IoT/camera
-    container_name: camera-graz
+    container_name: camera-vienna
     restart: always
     environment:
       - NATS_URL=nats://nats:4222
-      - CAR_PARK_ID=Parking_Graz
-      - CAMERA_ID=graz_0
+      - CAR_PARK_ID=Parking_Vienna
+      - CAMERA_ID=vienna_0
     depends_on: [nats]
-    networks: [parking-graz]
+    networks: [parking-vienna]
     volumes:
       - ./data:/app/data
 
   barrier-entry:
     build:
       context: ./src/ticketless_parking_system/IoT/barrier
-    container_name: barrier-entry-graz
+    container_name: barrier-entry-vienna
     restart: always
     environment:
       - NATS_URL=nats://nats:4222
-      - BARRIER_ID=entry_graz_0
+      - BARRIER_ID=entry_vienna_0
     depends_on: [nats]
-    networks: [parking-graz]
+    networks: [parking-vienna]
 
   barrier-exit:
     build:
       context: ./src/ticketless_parking_system/IoT/barrier
-    container_name: barrier-exit-graz
+    container_name: barrier-exit-vienna
     restart: always
     environment:
       - NATS_URL=nats://nats:4222
-      - BARRIER_ID=exit_graz_0
+      - BARRIER_ID=exit_vienna_0
     depends_on: [nats]
-    networks: [parking-graz]
+    networks: [parking-vienna]
 
   edge:
     build:
       context: ./src/ticketless_parking_system/edge
-    container_name: edge-graz
+    container_name: edge-vienna
     restart: always
     environment:
       - EDGE_NATS_URL=nats://nats:4222
-      - CLOUD_URL=http://54.243.10.60:8080
-      - CLOUD_NATS_URL=nats://3.87.211.209:4222
+      - CLOUD_URL=http://54.167.216.74:8080
+      - CLOUD_NATS_URL=nats://54.211.204.6:4222
       - DB_PATH=/app/data/parking.db
-      - CAR_PARK_ID=Parking_Graz
-      - CAR_PARK_LAT=47.076668
-      - CAR_PARK_LNG=15.421371
+      - CAR_PARK_ID=Parking_Vienna
+      - CAR_PARK_LAT=48.210033
+      - CAR_PARK_LNG=16.363449
     depends_on: [nats, camera, barrier-entry, barrier-exit]
-    networks: [parking-graz]
+    networks: [parking-vienna]
     volumes:
-      - edge-db-graz:/app/data
+      - edge-db-vienna:/app/data
 
 networks:
-  parking-graz:
+  parking-vienna:
     driver: bridge
 
 volumes:
-  edge-db-graz:
+  edge-db-vienna:

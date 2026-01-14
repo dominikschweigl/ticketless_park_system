@@ -6,12 +6,13 @@ import glob
 from nats.aio.client import Client as NATS
 from nats.errors import TimeoutError as NATSTimeoutError
 
-DISPLAY_TIME = 5.0
-FRAME_DELAY = 1.0
+DISPLAY_TIME = 1.0
+FRAME_DELAY = 3.0
 NATS_URL = os.environ.get("NATS_URL")
 CAMERA_ID = os.environ.get("CAMERA_ID", "0")
-BARRIER_ID_ENTRY = CAMERA_ID  + "_entry"
-BARRIER_ID_EXIT = CAMERA_ID + "_exit"
+BARRIER_ID_ENTRY = f"entry_{CAMERA_ID}"
+BARRIER_ID_EXIT  = f"exit_{CAMERA_ID}"
+
 
 
 # ---------------------------------------------------------
@@ -36,14 +37,14 @@ async def simulate_entry_stream(car_paths, nats_client, empty_path, entered_queu
 
         print(f"[ENTRY] Car enters: {car_path}")
 
-
+        frame = cv2.resize(frame, (640, 360))
         # Push the frame to the exit stream
         await entered_queue.put(frame.copy())
 
         # --- Show car for DISPLAY_TIME ---
         start = asyncio.get_running_loop().time()
         while asyncio.get_running_loop().time() - start < DISPLAY_TIME:
-            _, buf = cv2.imencode(".jpg", frame)
+            _, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
             await nats_client.publish("camera.entry", buf.tobytes(), headers=headers)
             await asyncio.sleep(FRAME_DELAY)
 
