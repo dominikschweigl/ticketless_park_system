@@ -9,6 +9,10 @@ import akka.http.javadsl.ServerBinding;
 import akka.http.javadsl.model.ContentTypes;
 import akka.http.javadsl.model.HttpResponse;
 import akka.http.javadsl.model.StatusCodes;
+import akka.http.javadsl.model.HttpHeader;
+import akka.http.javadsl.model.headers.HttpOrigin;
+import akka.http.javadsl.model.headers.HttpOriginRange;
+import akka.http.javadsl.model.headers.RawHeader;
 import akka.http.javadsl.server.Route;
 import com.google.gson.Gson;
 import com.ticketless.parking.actors.ParkingLotManagerActor;
@@ -20,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.concurrent.CompletionStage;
+import java.util.Arrays;
 
 import static akka.http.javadsl.server.Directives.*;
 import static akka.http.javadsl.server.PathMatchers.segment;
@@ -31,6 +36,15 @@ public class ParkingHttpServer {
     private static final Logger logger = LoggerFactory.getLogger(ParkingHttpServer.class);
     private static final Duration ASK_TIMEOUT = Duration.ofSeconds(5);
     private static final long ENTITY_TIMEOUT_MS = 5000;
+
+    private static final HttpHeader ALLOW_ORIGIN =
+        RawHeader.create("Access-Control-Allow-Origin", "*"); // In Production, here frontend IP
+
+    private static final HttpHeader ALLOW_METHODS =
+            RawHeader.create("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+
+    private static final HttpHeader ALLOW_HEADERS =
+            RawHeader.create("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
     private final ActorSystem<?> actorSystem;
     private final Scheduler scheduler;
@@ -58,7 +72,7 @@ public class ParkingHttpServer {
     public CompletionStage<ServerBinding> start(String host, int port) {
         final Http http = Http.get(actorSystem);
 
-        binding = http.newServerAt(host, port).bind(createRoutes());
+        binding = http.newServerAt(host, port).bind(withCors(createRoutes()));
 
         binding.thenAccept(b -> logger.info("HTTP Server started at http://{}:{}/", host, port))
                 .exceptionally(ex -> {
@@ -147,6 +161,24 @@ public class ParkingHttpServer {
                     ))
                 ))
             ))
+        );
+    }
+
+    private Route withCors(Route innerRoute) {
+        return respondWithHeaders(
+                Arrays.asList(
+                    ALLOW_ORIGIN,
+                    ALLOW_METHODS,
+                    ALLOW_HEADERS
+                ),
+                () -> concat(
+                        // Handle browser preflight requests
+                        options(() ->
+                                complete(HttpResponse.create()
+                                        .withStatus(StatusCodes.OK))
+                        ),
+                        innerRoute
+                )
         );
     }
 
