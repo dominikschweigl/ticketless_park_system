@@ -27,6 +27,42 @@ services:
     volumes:
       - ./data:/app/data  # mount your image dataset
 
+  barrier-entry:
+    build:
+      context: ./src/ticketless_parking_system/IoT/barrier   # Pfad anpassen
+    environment:
+      - NATS_URL=nats://nats:4222
+      - BARRIER_ID=0_entry
+    depends_on:
+      - nats
+    networks:
+      - parking-net
+
+  barrier-exit:
+    build:
+      context: ./src/ticketless_parking_system/IoT/barrier
+    environment:
+      - NATS_URL=nats://nats:4222
+      - BARRIER_ID=0_exit
+    depends_on:
+      - nats
+    networks:
+      - parking-net
+
+  dashboard:
+    build:
+      context: ./dashboard
+    container_name: dashboard
+    restart: always
+    environment:
+      - NATS_URL=nats://nats:4222
+    ports:
+      - "8000:8000"
+    depends_on:
+      - nats
+    networks:
+      - parking-net
+      
   edge-server:
     build:
       context: ./src/ticketless_parking_system/edge

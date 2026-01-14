@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Barrier Dashboard</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; }
+    .title { font-weight: 700; margin-bottom: 6px; }
+    .meta { color: #666; font-size: 12px; margin-bottom: 8px; }
+    img { width: 100%; height: auto; display: block; }
+    .badge { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border:1px solid #ddd; }
+  </style>
+</head>
+<body>
+  <h2>Barrier Dashboard</h2>
+  <div class="grid" id="grid"></div>
+
+<script>
+  const OPEN_IMG = "/static/barrier_open.png";
+  const CLOSED_IMG = "/static/closed_barrier.png";
+
+  const grid = document.getElementById("grid");
+  const cards = new Map(); // barrier_id -> DOM
+
+  function normalizeState(s) {
+    s = (s || "").toLowerCase();
+    if (s === "open" || s === "opening") return "open";
+    if (s === "closed" || s === "closing") return "closed";
+    return "closed";
+  }
+
+  function upsertCard(payload) {
+    const id = payload.barrier_id || "unknown";
+    const rawState = payload.state || "closed";
+    const state = normalizeState(rawState);
+    const ok = payload.ok !== false;
+    const info = payload.info || "";
+    const ts = payload.ts || "";
+
+    let el = cards.get(id);
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = `
+        <div class="title"></div>
+        <div class="meta"></div>
+        <div><span class="badge"></span></div>
+        <img />
+      `;
+      grid.appendChild(el);
+      cards.set(id, el);
+    }
+
+    el.querySelector(".title").textContent = id;
+    el.querySelector(".meta").textContent = ts ? `ts: ${ts}` : "";
+    el.querySelector(".badge").textContent = ok ? rawState : `${rawState} (ERROR)`;
+    el.querySelector("img").src = (state === "open") ? OPEN_IMG : CLOSED_IMG;
+    el.querySelector("img").alt = state;
+  }
+
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+
+    if (msg.type === "snapshot") {
+      const states = msg.states || {};
+      Object.values(states).forEach(upsertCard);
+      return;
+    }
+
+    if (msg.type === "update") {
+      upsertCard(msg);
+    }
+  };
+
+  ws.onopen = () => console.log("WS connected");
+  ws.onclose = () => console.log("WS closed");
+</script>
+</body>
+</html>
