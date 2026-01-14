@@ -34,7 +34,8 @@ services:
     restart: always
     environment:
       - EDGE_NATS_URL=nats://nats:4222
-      - CLOUD_NATS_URL=nats://nats:4222
+      - CLOUD_URL=http://<cloud-ip>:8080
+      - CLOUD_NATS_URL=nats://<cloud-nats-ip>:4222
       - DB_PATH=/app/data/parking.db
     depends_on:
       - nats
@@ -44,22 +45,22 @@ services:
       # persistent storage for SQLite DB file
       - edge-db-data:/app/data
 
-  cloud:
-      build:
-        context: ./src/ticketless_parking_system/cloud   # <-- adjust to your Dockerfile folder
-      container_name: parking-system-cloud
-      restart: always
-      ports:
-        - "8080:8080"
-      environment:
-        - PARKING_ENVIRONMENT=development
-        - PARKING_ENABLE_METRICS=false
-        - HTTP_PORT=8080
-        - NATS_URL=nats://nats:4222
-      depends_on:
-        - nats
-      networks:
-        - parking-net
+  # cloud:
+  #     build:
+  #       context: ./src/ticketless_parking_system/cloud   # <-- adjust to your Dockerfile folder
+  #     container_name: parking-system-cloud
+  #     restart: always
+  #     ports:
+  #       - "8080:8080"
+  #     environment:
+  #       - PARKING_ENVIRONMENT=development
+  #       - PARKING_ENABLE_METRICS=false
+  #       - HTTP_PORT=8080
+  #       - NATS_URL=nats://nats:4222
+  #     depends_on:
+  #       - nats
+  #     networks:
+  #       - parking-net
 
 networks:
   parking-net:

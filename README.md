@@ -210,6 +210,55 @@ After deployment completes:
 - **NATS**: `nats://<nats_public_ip>:4222` (for edge servers)
 - **Webapp**: `http://<webapp_public_ip>`
 
+### Terraform Outputs and Edge Server Configuration
+
+After a successful deployment, Terraform prints the public IP addresses of the created services:
+
+Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
+
+Outputs:
+
+```
+akka_app_public_ip = "13.221.85.90"  
+nats_public_ip     = "54.226.212.72"  
+webapp_public_ip   = "54.152.140.32"
+```
+
+These outputs are required to configure the **edge server**, which connects to the cloud-hosted Akka backend and NATS instance.
+
+### Configure Edge Server (`docker-compose.yml`)
+
+In the edge server’s `docker-compose.yml`, replace the placeholder values with the Terraform outputs:
+
+```
+edge-server:
+  build:
+    context: ./src/ticketless_parking_system/edge
+  container_name: edge-server
+  restart: always
+  environment:
+    - EDGE_NATS_URL=nats://nats:4222
+    - CLOUD_URL=http://<akka-cloud-ip>:8080
+    - CLOUD_NATS_URL=nats://<cloud-nats-ip>:4222
+    - DB_PATH=/app/data/parking.db
+```
+
+Replace the placeholders as follows:
+
+- `<akka-cloud-ip>` → value of `akka_app_public_ip`
+- `<cloud-nats-ip>` → value of `nats_public_ip`
+
+Example:
+
+- CLOUD_URL=http://13.221.85.90:8080  
+- CLOUD_NATS_URL=nats://54.226.212.72:4222
+
+### Notes
+
+- The **webapp** is automatically configured during deployment to point to the Akka backend.
+- The **edge server** must be configured manually because it runs outside the Terraform-managed infrastructure.
+- If Terraform is re-applied and IPs change, the edge server configuration must be updated accordingly.
+
 ### Cleanup
 
 ```bash
