@@ -29,7 +29,7 @@ services:
 
   barrier-entry:
     build:
-      context: ./src/ticketless_parking_system/IoT/barrier   # Pfad anpassen
+      context: ./src/ticketless_parking_system/IoT/barrier   
     environment:
       - NATS_URL=nats://nats:4222
       - BARRIER_ID=0_entry
@@ -51,7 +51,7 @@ services:
 
   dashboard:
     build:
-      context: ./dashboard
+      context: ./src/ticketless_parking_system/IoT/dashboard
     container_name: dashboard
     restart: always
     environment:
