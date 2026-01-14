@@ -3,6 +3,8 @@ import os
 import threading
 import tkinter as tk
 from nats.aio.client import Client as NATS
+import json
+from datetime import datetime, timezone
 
 NATS_URL = os.environ.get("NATS_URL", "nats://localhost:4222")
 BARRIER_ID = os.environ.get("BARRIER_ID", "barrier0")
@@ -66,65 +68,67 @@ class BarrierSensorController:
 
 
 class BarrierController:
-    def __init__(self, sensor: BarrierSensorController, ui: BarrierUI = None):
+    def __init__(self, sensor: BarrierSensorController, ui: BarrierUI = None, nc: NATS = None, barrier_id: str = BARRIER_ID):
         self.sensor = sensor
         self.ui = ui
+        self.nc = nc
+        self.barrier_id = barrier_id
         self._lock = asyncio.Lock()  
 
+    async def _publish_state(self, state: str, ok: bool = True, info: str = ""):
+        if not self.nc:
+            return
+        payload = {
+            "barrier_id": self.barrier_id,
+            "state": state,
+            "ok": ok,
+            "info": info,
+            "ts": datetime.now(timezone.utc).isoformat()
+        }
+        await self.nc.publish(f"{self.barrier_id}.state", json.dumps(payload).encode("utf-8"))
+
     async def open_barrier(self) -> bool:
-        """
-        opens barrier if vehicle is detected, waits for vehicle to pass,
-        then closes barrier. Returns True on success.
-        """
         async with self._lock:
             try:
-                detected = await asyncio.wait_for(
-                    self.sensor.detect_vehicle(),
-                    timeout=10
-                )
+                await self._publish_state("checking")
+                detected = await asyncio.wait_for(self.sensor.detect_vehicle(), timeout=10)
                 if not detected:
-                    print("No vehicle detected at the barrier.")
+                    await self._publish_state("closed", ok=False, info="no_vehicle_detected")
                     return False
 
-                print("Opening barrier...")
-                # TODO: GPIO function call
                 if self.ui:
                     self.ui.set_barrier_state("open")
-                await asyncio.sleep(2)  # time to open
+                await self._publish_state("opening")
+                await asyncio.sleep(2)
 
                 try:
-                    passed = await asyncio.wait_for(
-                        self.sensor.vehicle_passed(),
-                        timeout=10
-                    )
+                    passed = await asyncio.wait_for(self.sensor.vehicle_passed(), timeout=10)
                     if not passed:
-                        print("Vehicle did not pass the barrier.")
-                        print("Closing ...")
+                        await self._publish_state("closing", ok=False, info="vehicle_not_passed")
                         await self.close_barrier()
                         return False
 
-                    await asyncio.sleep(3)  # time to pass through
-                    print("Closing barrier...")
+                    await asyncio.sleep(3)
+                    await self._publish_state("closing")
                     await self.close_barrier()
+                    await self._publish_state("closed")
                     return True
 
                 except asyncio.TimeoutError:
-                    print("Timeout: Vehicle did not pass the barrier in time.")
-                    print("Closing barrier..")
+                    await self._publish_state("closing", ok=False, info="timeout_vehicle_passed")
                     await self.close_barrier()
+                    await self._publish_state("closed", ok=False)
                     return False
 
             except asyncio.TimeoutError:
-                print("Timeout: passthrough did not work.")
+                await self._publish_state("closed", ok=False, info="timeout_detect_vehicle")
                 await self.close_barrier()
                 return False
-            
+
     async def close_barrier(self):
-        # TODO: GPIO function call
         if self.ui:
-                self.ui.set_barrier_state("closed")
-        await asyncio.sleep(2)  # time to close
-        print("Closing barrier...")
+            self.ui.set_barrier_state("closed")
+        await asyncio.sleep(2)
 
 
 async def main(ui):
@@ -132,7 +136,7 @@ async def main(ui):
     await nc.connect(NATS_URL)
 
     sensor = BarrierSensorController()
-    barrier_component = BarrierController(sensor, ui = ui)
+    barrier_component = BarrierController(sensor, ui = ui, nc=nc, barrier_id=BARRIER_ID)
 
     async def barrier_callback(msg):
         print("Received barrier trigger:", msg.subject)
@@ -144,7 +148,7 @@ async def main(ui):
             await nc.publish(msg.reply, rep_payload)
 
    
-    await nc.subscribe(f"{BARRIER_ID}.trigger", "barrier", cb=barrier_callback)
+    await nc.subscribe(f"{BARRIER_ID}.trigger", cb=barrier_callback)
 
     
 
@@ -158,6 +162,7 @@ def start_loop(ui):
     asyncio.run(main(ui))
 if __name__ == "__main__":
     #ui = BarrierUI() -- deactivate for docker --
-    t = threading.Thread(target=start_loop, args=(None,)) # deactivate for docker --
-    t.start()
+    #t = threading.Thread(target=start_loop, args=(None,)) # deactivate for docker --
+    #t.start()
+    asyncio.run(main(None)) 
     #ui.root.mainloop()

@@ -15,6 +15,6 @@ COPY . /app
 RUN pip install --no-cache-dir -r requirements.txt
 
 ENV BARRIER_ID=0
-ENV NATS_URL=nats://nats-server:4222
+ENV NATS_URL=nats://nats:4222
 
 ENTRYPOINT ["python", "barrier.py"]

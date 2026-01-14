@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Barrier Dashboard</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; }
+    .title { font-weight: 700; margin-bottom: 6px; }
+    .meta { color: #666; font-size: 12px; margin-bottom: 8px; }
+    img { width: 100%; height: auto; display: block; border-radius: 8px; border: 1px solid #eee; }
+    .badge { display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; border:1px solid #ddd; }
+    .section-label { font-size: 12px; color:#666; margin: 8px 0 4px; }
+  </style>
+</head>
+<body>
+  <h2>Barrier Dashboard</h2>
+  <div class="grid" id="grid"></div>
+
+<script>
+
+  const OPEN_IMG = "/static/barrier_open.png";
+  const CLOSED_IMG = "/static/closed_barrier.png";
+
+  const grid = document.getElementById("grid");
+  const cards = new Map();        
+  const cameraFrames = new Map(); 
+
+  function normalizeState(s) {
+    s = (s || "").toLowerCase();
+    if (s === "open" || s === "opening") return "open";
+    if (s === "closed" || s === "closing") return "closed";
+    if (s === "checking") return "closed";
+    return "closed";
+  }
+
+  function barrierToCameraId(barrierId) {
+
+    const m = barrierId.match(/^(\d+)_(entry|exit)$/);
+    if (!m) return null;
+    const num = m[1];
+    const side = m[2];
+    return `${side}_${num}`;
+  }
+
+  function upsertCard(payload) {
+    const id = payload.barrier_id || "unknown";
+    const rawState = payload.state || "closed";
+    const state = normalizeState(rawState);
+    const ok = payload.ok !== false;
+    const info = payload.info || "";
+    const ts = payload.ts || "";
+
+    let el = cards.get(id);
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "card";
+      el.innerHTML = `
+        <div class="title"></div>
+        <div class="meta"></div>
+        <div><span class="badge"></span></div>
+
+        <div class="section-label">Barrier</div>
+        <img class="barrier-img" />
+
+        <div class="section-label">Camera</div>
+        <img class="camera-img" />
+      `;
+      grid.appendChild(el);
+      cards.set(id, el);
+    }
+
+    el.querySelector(".title").textContent = id;
+    el.querySelector(".meta").textContent = ts ? `ts: ${ts}` : "";
+    el.querySelector(".badge").textContent = ok ? rawState : `${rawState} (ERROR${info ? ": " + info : ""})`;
+
+
+    const barrierImg = el.querySelector(".barrier-img");
+    barrierImg.src = (state === "open") ? OPEN_IMG : CLOSED_IMG;
+    barrierImg.alt = state;
+
+    const camImg = el.querySelector(".camera-img");
+    const camId = barrierToCameraId(id);
+    if (camId && cameraFrames.has(camId)) {
+      camImg.src = cameraFrames.get(camId);
+      camImg.alt = camId;
+    } else {
+      camImg.removeAttribute("src");
+      camImg.alt = "no camera";
+    }
+  }
+
+
+  const wsProto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${wsProto}://${location.host}/ws`);
+
+  ws.onopen = () => console.log("WS connected");
+  ws.onclose = () => console.log("WS closed");
+
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+
+    if (msg.type === "snapshot") {
+      const states = msg.states || {};
+      const cams = msg.cameras || {};
+      Object.entries(cams).forEach(([k, v]) => cameraFrames.set(k, v));
+      Object.values(states).forEach(upsertCard);
+      return;
+    }
+
+    if (msg.type === "camera") {
+      cameraFrames.set(msg.camera_id, msg.jpg);
+
+
+      for (const [barrierId, el] of cards.entries()) {
+        const camId = barrierToCameraId(barrierId);
+        if (camId === msg.camera_id) {
+          const camImg = el.querySelector(".camera-img");
+          camImg.src = msg.jpg;
+          camImg.alt = msg.camera_id;
+        }
+      }
+      return;
+    }
+
+    if (msg.type === "update") {
+      upsertCard(msg);
+    }
+  };
+</script>
+</body>
+</html>
