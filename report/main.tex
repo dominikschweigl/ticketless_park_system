@@ -7,6 +7,9 @@
 \usepackage{graphicx}
 \usepackage{textcomp}
 \usepackage{xcolor}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 \begin{document}
@@ -195,6 +198,58 @@ exceeded the configured timeout threshold of five seconds and were recorded as
 client-side timeouts. While the backend remained operational, the response times
 clearly exceeded acceptable limits, revealing scalability constraints of the
 single-instance deployment.
+
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    bar width=10pt,
+    width=\linewidth,
+    height=6cm,
+    ymin=0,
+    ylabel={p95 Latency [ms]},
+    symbolic x coords={
+        GET /health,
+        POST /api/parking-lots,
+        DELETE /api/parking-lots/{id},
+        POST /api/occupancy
+    },
+    xtick=data,
+    xticklabel style={rotate=25, anchor=east, yshift=-4pt},
+        legend style={
+            at={(0.5,-0.5)},
+            anchor=north,
+            legend columns=2,
+            draw=none
+        },
+    grid=both
+]
+
+% -------- Normal Load --------
+\addplot coordinates {
+    (GET /health,131.19)
+    (POST /api/parking-lots,171.08)
+    (DELETE /api/parking-lots/{id},117.21)
+    (POST /api/occupancy,125.67)
+};
+
+% -------- High Load --------
+\addplot coordinates {
+    (GET /health,5005.38)
+    (POST /api/parking-lots,5291.17)
+    (DELETE /api/parking-lots/{id},5005.37)
+    (POST /api/occupancy,5005.71)
+};
+
+\legend{Normal Load, High Load}
+
+\end{axis}
+\end{tikzpicture}
+\caption{HTTP backend p95 latency per endpoint under normal and high load.}
+\label{fig:http_latency_comparison}
+\end{figure}
+
 
 \subsection{Test Case 2: Web Interface Load Test (Nginx + React)}
 To evaluate the performance of the web interface, we first benchmarked the standalone web server that serves the compiled React frontend. This test was intentionally isolated from the rest of the system components, meaning that neither the Akka cloud backend nor any edge servers were involved. In this setup, the measured latency and throughput mainly reflect the capability of the Nginx server to deliver static frontend assets under concurrent access.
