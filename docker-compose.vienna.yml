@@ -52,8 +52,8 @@ services:
     restart: always
     environment:
       - EDGE_NATS_URL=nats://nats:4222
-      - CLOUD_URL=http://54.167.216.74:8080
-      - CLOUD_NATS_URL=nats://54.211.204.6:4222
+      - CLOUD_URL=http://98.94.34.25:8080
+      - CLOUD_NATS_URL=nats://34.239.113.34:4222
       - DB_PATH=/app/data/parking.db
       - CAR_PARK_ID=Parking_Vienna
       - CAR_PARK_LAT=48.210033
