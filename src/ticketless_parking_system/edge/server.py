@@ -11,6 +11,7 @@ from datetime import datetime
 import easyocr
 from edge_db import ParkingDatabase
 from nats import errors as nats_errors
+from nats.errors import TimeoutError as NATSTimeoutError
 
 
 from cloud_parking_client import CloudParkingClient
@@ -28,30 +29,15 @@ CAR_PARK_LNG = float(os.environ.get("CAR_PARK_LNG", "11.343537320891627"))
 EDGE_NATS_URL = os.environ.get("EDGE_NATS_URL", "nats://localhost:4222")
 CLOUD_NATS_URL = os.environ.get("CLOUD_NATS_URL", "nats://localhost:4222")
 
-async def open_barrier(nc_edge: NATS, barrier_id: str):
-    subject = f"{barrier_id}.trigger"
+async def open_barrier(nats_client: NATS, barrier_id: str):
     try:
-        reply = await nc_edge.request(subject, b"", timeout=2)
-
-        if reply.data == b"done":
-            print(f"[BARRIER] Opened successfully via {subject}")
-            return True
-        else:
-            print(f"[BARRIER] Unexpected reply from {subject}: {reply.data!r}")
-            return False
-
-    except nats_errors.NoRespondersError:
-        # No barrier microservice is running -> simulate success so system keeps working
-        print(f"[BARRIER][SIM] No responders on {subject}. Simulating open.")
-        return True
-
-    except asyncio.TimeoutError:
-        print(f"[BARRIER] Timeout waiting for reply on {subject}.")
-        return False
-
-    except Exception as e:
-        print(f"[BARRIER] Error calling {subject}: {e}")
-        return False
+        resp_msg = await nats_client.request(f"{barrier_id}.trigger", b"", timeout=30)
+        resp = resp_msg.data.decode("utf-8", errors="replace")
+        print(f"[ENTRY] Barrier replied: {resp}")
+        if resp != "done":
+            print("Barrier failed to open")
+    except NATSTimeoutError:
+        print("[ENTRY] Timeout waiting for barrier reply")
 
 
 async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: ParkingDatabase, tracker: ParkingLotTracker, cloud_client: CloudParkingClient):
@@ -294,7 +280,7 @@ async def main():
         await asyncio.Future()  # run forever until cancelled
     finally:
         await nc_edge.drain()
-        await nc_cloud.drain()
+        #await nc_cloud.drain()
         await cloud_client.close()
 
 asyncio.run(main())

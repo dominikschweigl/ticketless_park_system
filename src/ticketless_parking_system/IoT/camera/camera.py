@@ -51,15 +51,7 @@ async def simulate_entry_stream(car_paths, nats_client, empty_path, entered_queu
         # --- Show empty street for DISPLAY_TIME ---
         print("[ENTRY] Empty street")
 
-        try:
-            resp_msg = await nats_client.request(f"{BARRIER_ID_ENTRY}.trigger", b"", timeout=30)
-            resp = resp_msg.data.decode("utf-8", errors="replace")
-            print(f"[ENTRY] Barrier replied: {resp}")
-            if resp != "done":
-                print("Barrier failed to open")
-        except NATSTimeoutError:
-            print("[ENTRY] Timeout waiting for barrier reply")
-
+       
         start = asyncio.get_running_loop().time()
         while asyncio.get_running_loop().time() - start < DISPLAY_TIME:
             _, buf = cv2.imencode(".jpg", empty_frame)
@@ -106,14 +98,7 @@ async def simulate_exit_stream(nats_client, empty_path, entered_queue: asyncio.Q
 
                 await nats_client.publish("camera.exit", buf.tobytes(), headers=headers)
                 await asyncio.sleep(FRAME_DELAY)
-            try:
-                resp_msg = await nats_client.request(f"{BARRIER_ID_EXIT}.trigger", b"", timeout=30)
-                resp = resp_msg.data.decode("utf-8", errors="replace")
-                print(f"[EXIT] Barrier replied: {resp}")
-                if resp != "done":
-                    print("Barrier failed to open")
-            except NATSTimeoutError:
-                print("[EXIT] Timeout waiting for barrier reply")
+          
 
 
 

@@ -32,7 +32,7 @@ services:
       context: ./src/ticketless_parking_system/IoT/barrier   
     environment:
       - NATS_URL=nats://nats:4222
-      - BARRIER_ID=0_entry
+      - BARRIER_ID=entry_0
     depends_on:
       - nats
     networks:
@@ -43,7 +43,7 @@ services:
       context: ./src/ticketless_parking_system/IoT/barrier
     environment:
       - NATS_URL=nats://nats:4222
-      - BARRIER_ID=0_exit
+      - BARRIER_ID=exit_0
     depends_on:
       - nats
     networks:
