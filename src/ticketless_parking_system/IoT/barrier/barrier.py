@@ -56,13 +56,13 @@ class BarrierSensorController:
 
     async def detect_vehicle(self) -> bool:
         # TODO: sensor simulation / real sensor logic here
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.5)
         detected = True  # GPIO function call       
         return detected                 
 
     async def vehicle_passed(self) -> bool:
         # TODO: sensor simulation / real sensor logic here
-        await asyncio.sleep(1) 
+        await asyncio.sleep(0.5)
         passed = True  # GPIO function call
         return passed           
 
@@ -99,7 +99,7 @@ class BarrierController:
                 if self.ui:
                     self.ui.set_barrier_state("open")
                 await self._publish_state("opening")
-                await asyncio.sleep(2)
+                await asyncio.sleep(0.5)
 
                 try:
                     passed = await asyncio.wait_for(self.sensor.vehicle_passed(), timeout=10)
@@ -108,7 +108,7 @@ class BarrierController:
                         await self.close_barrier()
                         return False
 
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(0.5)
                     await self._publish_state("closing")
                     await self.close_barrier()
                     await self._publish_state("closed")
@@ -128,7 +128,7 @@ class BarrierController:
     async def close_barrier(self):
         if self.ui:
             self.ui.set_barrier_state("closed")
-        await asyncio.sleep(2)
+        await asyncio.sleep(0.5)
 
 
 async def main(ui):

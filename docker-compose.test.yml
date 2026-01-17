@@ -70,8 +70,8 @@ services:
     restart: always
     environment:
       - EDGE_NATS_URL=nats://nats:4222
-      - CLOUD_URL=http://localhost:8080
-      - CLOUD_NATS_URL=nats://nats:4222
+      - CLOUD_ENABLED=0
+      - ALLOW_EXIT_WITHOUT_CLOUD=1
       - DB_PATH=/app/data/parking.db
     depends_on:
       - nats
