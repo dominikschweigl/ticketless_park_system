@@ -26,10 +26,18 @@
 \maketitle
 
 \section{Introduction}
-This project implements a distributed parking system that captures the license plate of incoming and leaving vehicles at the gates of a car park. These detections are used to be able to pay only with one's license plate number at the payment station. With this system it is possible to allow customers to pay without tickets. Instead, customers pay from their smartphones in the web or at payment stations using their license plate number. In addition, the web app allows customers to view car parks with open spaces and book a parking spot in advance.
-Adding to basic availability and booking functionality, the web application also supports location-aware parking discovery.
+This project implements a distributed parking system that captures the 
+license plate of incoming and leaving vehicles at the gates of a car 
+park. With this system, customers are able to pay without tickets. 
+Instead, customers pay from their 
+smartphones in the web or at payment stations using their license plate 
+number. In addition, the web app allows customers to view car parks with 
+open spaces and book a parking spot in advance.
+In addition, the web application supports location-aware nearest parking 
+facility discovery.
 
-The dataset we will use is the Car License Plate Detection dataset from Kaggle. It features more than 400 images of car front/ rear views with clearly visible license plates. For a real system one would fine tune a corresponding detection model on the specific surroundings and camera angle of the actual entries to the parking space. We will use a precrafted YOLOv11 license plate detection model  for this project.
+
+The dataset we use is the Car License Plate Detection dataset from Kaggle. It features more than 400 images of car front/ rear views with clearly visible license plates. For a real system one would fine tune a corresponding detection model on the specific surroundings and camera angle of the actual entries to the parking space. We will use a precrafted YOLOv11 license plate detection model  for this project.
 
 \section{System architecture}
 
