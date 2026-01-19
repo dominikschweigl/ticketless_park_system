@@ -1,0 +1,159 @@
+\documentclass[aspectratio=169]{beamer}
+
+% ----------------------------
+% BASIC SETUP
+% ----------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}     
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+% ----------------------------
+% REMOVE NAVIGATION SYMBOLS
+% ----------------------------
+\setbeamertemplate{navigation symbols}{}
+
+% ----------------------------
+% COLORS + SYLE
+% ----------------------------
+\definecolor{Accent}{RGB}{40,70,120} 
+\setbeamercolor{title}{fg=Accent}
+\setbeamercolor{frametitle}{fg=Accent}
+\setbeamercolor{structure}{fg=Accent}
+\newcommand{\kw}[1]{\textbf{\textcolor{Accent}{#1}}}
+\setbeamertemplate{itemize item}{\raisebox{0.2ex}{\tiny$\blacktriangleright$}}
+\setbeamertemplate{itemize subitem}{\raisebox{0.3ex}{\scriptsize$\bullet$}}
+\setbeamertemplate{itemize subsubitem}{\tiny$\circ$}
+% ----------------------------
+% FONTS
+% ----------------------------
+\setbeamerfont{title}{series=\bfseries, size=\Large}
+\setbeamerfont{frametitle}{series=\bfseries, size=\large}
+\setbeamerfont{normal text}{size=\normalsize}
+
+% ----------------------------
+% FOOTLINE (minimal)
+% ----------------------------
+\setbeamertemplate{footline}{
+    \hspace{1em}
+    \scriptsize
+    \textcolor{gray}{Ticketless Parking}
+    %\hfill
+    %\insertframenumber
+    \hfill
+    \textcolor{gray}{PS Distributed Systems}
+    \hspace{1em}
+}
+
+% ----------------------------
+% TITLE INFO
+% ----------------------------
+\title{Ticketless Parking}
+\author{Dominik Schweigl, Nikola Adzic, Daniel Wenger}
+\institute{Universität Innsbruck}
+\date{}
+
+
+% ----------------------------
+% DOCUMENT
+% ----------------------------
+\begin{document}
+
+% TITLE PAGE
+\begin{frame}[plain]
+    \vfill
+    \titlepage
+    \vfill
+\end{frame}
+
+% ----------------------------
+\begin{frame}{System Architecture}
+    \centering
+    \includegraphics[width=0.9\linewidth, height=0.8\textheight, keepaspectratio]{architecture_diagram.png} 
+\end{frame}
+
+% ----------------------------
+\begin{frame}{Resources (1/3)}
+\begin{itemize}
+    \item<+-> \kw{Dataset: Car License Plate Detection (Kaggle)}
+    \begin{itemize}
+        \item 400+ annotated images (front/rear views)
+        \item Suitable for prototyping and evaluation
+    \end{itemize}
+
+    \item<+-> \kw{Computer Vision: YOLOv11 + OCR}
+    \begin{itemize}
+        \item Real-time license plate detection on the edge
+        \item \textbf{OCR} extracts the license plate string
+    \end{itemize}
+
+    \item<+-> \kw{Messaging: NATS}
+    \begin{itemize}
+        \item Pub/Sub for camera frames and control signals (barrier)
+        \item Asynchronous cloud-to-edge communication
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+% ----------------------------
+\begin{frame}{Resources (2/3)}
+\begin{itemize}
+    \item<+-> \kw{Edge Stack: Python + SQLite + FastAPI + Akka}
+    \begin{itemize}
+        \item \textbf{Python} for ML integration
+        \item \textbf{SQLite} as lightweight local store
+        \item \textbf{FastAPI} to monitor barrier state and camera imput
+    \end{itemize}
+
+    \item<+-> \kw{Cloud Stack: Akka Typed + Akka HTTP + DynamoDB}
+    \begin{itemize}
+        \item Actor-based orchestration for \textit{parking lot} functionality
+        \item \textbf{REST API} for edge and web clients
+        \item Persistent actor state via \textbf{DynamoDB}
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+% ----------------------------
+\begin{frame}{Resources (3/3)}
+    \begin{itemize}
+        \item<+-> \kw{Web Application: React + Tailwind CSS}
+            \begin{itemize}
+                \item \textbf{React} provides a dynamic UI for availability, reservations, routing and payments
+                \item \textbf{Tailwind} CSS for responsive layout
+                \item Browser-based \textbf{geolocation} supports finding nearby parking facilities
+            \end{itemize}
+
+        \item<+-> \kw{Hosting \& Deployment: EC2 + Nginx + Terraform (+ S3)}
+        \begin{itemize}
+            \item EC2 hosts the Akka backend and the web frontend on separate instances
+            \item \textbf{Nginx} serves as webserver for the WebApp
+            \item \textbf{Terraform} defines infrastructure as code; build artifacts are distributed via S3
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+% ----------------------------
+
+
+\begin{frame}{Live Demo}
+\centering
+    \kw{Live Demo}
+\end{frame}
+
+% ----------------------------
+
+
+\begin{frame}{Evaluation}
+
+\end{frame}
+
+
+% ----------------------------
+\begin{frame}{Thank you for your attention!}
+    \centering
+    Questions?
+\end{frame}
+
+\end{document}
