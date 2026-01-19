@@ -26,57 +26,134 @@
 \maketitle
 
 \section{Introduction}
-This project implements a distributed parking system that captures the 
-license plate of incoming and leaving vehicles at the gates of a car 
-park. With this system, customers are able to pay without tickets. 
-Instead, customers pay from their 
-smartphones in the web or at payment stations using their license plate 
-number. In addition, the web app allows customers to view car parks with 
-open spaces and book a parking spot in advance.
-In addition, the web application supports location-aware nearest parking 
-facility discovery.
+Efficient parking management is an increasingly important challenge in urban environments, where traditional ticket-based parking systems often lead to congestion at entry and exit points, operational overhead, and poor user experience due to lost tickets and limited real-time visibility into parking availability.
 
+This project presents a distributed, ticketless parking system based on automatic license plate recognition. Cameras installed at parking lot entry and exit points capture vehicle license plates, which serve as the identifier for access control and payment. This enables vehicles to enter and exit without physical tickets or manual interaction.
+Users interact with the system through a single web application, accessible both on smartphones and on on-site payment stations, which allows them to pay, reserve parking spaces, view parking space availability, and discover the nearest parking facilities based on their location.
 
-The dataset we use is the Car License Plate Detection dataset from Kaggle. It features more than 400 images of car front/ rear views with clearly visible license plates. For a real system one would fine tune a corresponding detection model on the specific surroundings and camera angle of the actual entries to the parking space. We will use a precrafted YOLOv11 license plate detection model  for this project.
+This work focuses on the system architecture, communication patterns, 
+and deployment considerations of the distributed parking solution. 
+Physical devices such as cameras, gates, and traffic lights are 
+simulated, and license plate recognition is implemented using a 
+YOLO license plate detection model combined with the EasyOCR optical character recognition model without evaluation 
+of computer vision performance.
 
-\section{System architecture}
+The remainder of this paper is structured as follows. Section~\ref{sec:system_architecture}
+describes the overall system architecture and its main components. 
+Section~\ref{sec:implementation_details} details the implementation 
+of the edge, cloud, and web layers. Section~\ref{sec:evaluation} evaluates the system 
+under different load scenarios. Section~\ref{sec:limitations} discusses 
+the limitations of our system, and Section~\ref{sec:conclusion} summarizes the paper and outlines future work.
 
-Regarding the components and functionality of this project, we will have 2 cameras 
-pointing to the entry and exit respectively at each car park. There will be 2 gates 
-for the entry and exit to the parking space controlled by an edge server. The edge 
-server will process the video stream of the cameras and run the license plate 
-detection algorithm. Once a license plate has been detected for a predefined amount 
-of time in front of the entry, the entry gate will open, and the car will be 
-registered in a local data store to guarantee data persistence. When the edge server 
-detects a vehicle that has already paid at the exit, which is queried from the cloud, 
-the gate will open, and a green signal will appear 
-on the traffic light. If the car has not paid or the amount of time to leave 
-the parking space after payment has expired, the gate will not open, and a red 
-signal will indicate the car to return and pay. Customers can pay their parking fee
-using the web application or the local payment station using their license plate. 
-A diagram of these components can be seen in Figure~\ref{fig:architecture_diagram}.
+\section{System Architecture}
+\label{sec:system_architecture}
 
-The cloud will receive updates from the edge servers on their current open capacity.
-The customer can also book a parking spot in advance for a given
-car park, which sends an event to the corresponding edge server to reserve a spot
-for the car with the customers license plate.
+The proposed parking system adopts a distributed edge--cloud architecture, 
+organizing responsibilities across four distinct layers. The IoT layer 
+handles sensing and actuation, the edge layer manages real-time processing 
+and actuator control, the cloud layer provides centralized services for 
+information management, booking, and payments, and the presentation layer 
+enables user interaction through a web-based interface. This layered approach 
+ensures low-latency parking actuator control at parking facilities while 
+supporting centralized payment processing and a global view of parking 
+availability. Figure~\ref{fig:architecture_diagram} illustrates the system 
+components and their interactions. For simplicity, only a single parking 
+lot is shown, though each facility deploys its own identical edge configuration.
 
-\begin{figure}[h!]
+\begin{figure}[t]
     \centering
     \includegraphics[width=1\linewidth]{assets/architecture_diagram.png}
-    \caption{The architecture diagram for this project. For visual purposes only a single car park system is illustrated.}
+    \caption{
+        The architecture diagram for this project. For clarity, only 
+        one parking lot edge is shown. Each parking lot has its own 
+        edge server, gate, camera, and message queue.    
+    }
     \label{fig:architecture_diagram}
 \end{figure}
 
+\subsection{Edge Layer}
+
+Each parking lot is equipped with an edge server that is directly connected 
+to the physical infrastructure of the facility. This includes two cameras 
+positioned at the entry and exit gates, barrier gates, and traffic lights. 
+The cameras continuously stream video data to the edge server via a local 
+NATS message queue, which decouples video producers from consumers. 
+
+The edge server performs real-time license plate detection on incoming video 
+frames using a YOLO license plate detection model combined with the EasyOCR optical character recognition model. 
+When a vehicle is detected at the 
+entry gate, 
+the edge server registers the vehicle locally and issues a command via the local
+NATS message queue to open 
+the entry barrier actuator. Local persistence using an SQLite database is maintained 
+to ensure data robustness against temporary edge server failures.
+
+At the exit gate, the edge server again detects the vehicle's license plate 
+and queries the cloud backend to verify the payment status associated with 
+the plate. If the vehicle has paid and the allowed exit window has not 
+expired, the edge server opens the exit gate and signals a green traffic 
+light. Otherwise, the gate remains closed and a red signal instructs the 
+driver to return and complete payment. In addition, the edge server sends
+occupancy updates to the cloud every time a vehicle enters or exits the parking lot.
+
+\subsection{Cloud Layer}
+
+The cloud backend is hosted on Amazon EC2 and implemented using the Akka 
+framework. It serves as the central coordination point for all parking 
+facilities. The cloud maintains global state such as parking lot registrations, 
+current occupancy levels, payment status, and advances bookings to the
+respective edge servers. Each parking 
+lot periodically reports its current occupancy to the cloud, allowing the 
+backend to maintain an up-to-date view of available parking spaces across 
+all facilities.
+
+The Communication between edge servers and the cloud backend uses a combination 
+of synchronous and asynchronous mechanisms. REST-based HTTP endpoints exposed 
+via Akka HTTP are used for operations from the edge to the cloud since many
+operations need immediate responses, such as payment verification at exit gates. 
+Asynchronous messaging via a 
+NATS message queue hosted on it's own EC2 instance is used for event-driven interactions, such as propagating 
+booking requests from the cloud to the appropriate edge server.
+
+
+\subsection{Web and User Interaction Layer}
+
+User interaction with the system is provided through a web application
+implemented using React and hosted 
+on a separate EC2 instance using Nginx as a web server. The same web 
+application is accessible both from users' personal smartphones and from 
+on-site payment stations within parking facilities. Through this interface, 
+users can view available parking lots, reserve parking spaces in advance using 
+their license plate number, complete payments, and discover nearby parking 
+facilities based on their current location.
+
 \section{Implementation details}
+\label{sec:implementation_details}
+
 Regarding our Service choices, the Akka Framework is used in the Cloud Layer as it is mandatory for this assignment. Actors will store their state in a DynamoDB table because we want to ensure reliability even if some server with Akka Actors crashes. The communication from the cloud to the edge server is done through a message queue to make the edge server location transparent for the cloud. The edge server computes the detection algorithm on the video stream and manages the local IoT devices as well as parking data to keep network traffic to the cloud low. This way we only send small messages of detection events with current open capacity to the cloud. Communication from the edge to the cloud Akka Backend does not go through the message queue and instead uses Akka's HTTP REST API. This is because some of the calls to the cloud for information retrieval like a GET request for car payment status fit better as synchronous calls rather than asynchronous messages. Therefore, to have a uniform access point for the edge we will use the REST API also for capacity update events. Though we leave the possibility open to also use the message queue for communication from the edge to the cloud backend.
 
 For the edge servers we will use Python to implement the license plate detection as Python is the de facto standard for machine learning related tasks. This means that controls of the gates and traffic lights will also be done via python. 
 
 \subsection{IoT Implementation}
-The camera is simulated by continuously sending images from the license plate detection dataset and a reference empty street scene to the edge server using a NATS message queue. It is made sure that the data sent by the entry and exit cameras is consistent. This means that the exit camera will only show cars leaving that have previously entered. The duration of the cars inside the car parks is sampled randomly.
 
-We plan to simulate the gates and traffic lights with a python program that visualizes their state with a library like Tkinter or similar a library.
+The dataset we use is the Car License Plate Detection dataset from 
+Kaggle. It features more than 400 images of car front/ rear views 
+with clearly visible license plates. For a real system one would 
+fine tune a corresponding detection model on the specific surroundings 
+and camera angle of the actual entries to the parking space. We will 
+use a precrafted YOLOv11 license plate detection model  for this 
+project.
+
+The camera is simulated by continuously sending images from the license 
+plate detection dataset and a reference empty street scene to the edge 
+server using a NATS message queue. It is made sure that the data sent 
+by the entry and exit cameras is consistent. This means that the exit 
+camera will only show cars leaving that have previously entered. The 
+duration of the cars inside the car parks is sampled randomly.
+
+We plan to simulate the gates and traffic lights with a python program 
+that visualizes their state with a library like Tkinter or similar a 
+library.
 
 For the web interface, we implemented a web application using React that allows
 users to interact with the parking system. Through this application, users can
@@ -121,6 +198,11 @@ temporary disconnection, while the cloud only needs to receive high-level
 events such as occupancy updates or payment checks.
 
 \subsection{Cloud Implementation}
+
+(Akka HTTP) : Edge servers need synchronous immediate responses for certain operations,
+    such as verifying payment status at exit gates or retrieving the list of registered parking lots. For these interactions, we implemented a RESTful HTTP API using Akka HTTP. Edge servers send HTTP requests to specific endpoints exposed by the cloud backend, which processes them and returns appropriate responses. This approach provides a uniform access point for edge servers and web clients alike.
+    Cloud needs to be available at all times for the system to work anyways.
+
 In the cloud layer we rely on Akka Typed as the central orchestration mechanism for all parking-lot related functionality. An embedded Akka HTTP server runs within the same typed ActorSystem and exposes a synchronous API to edge servers. Internally, the system is entirely message-driven, which gives us clear separation of concerns, robust concurrency, and predictable error handling.
 
 At the core sits a typed ParkingLotManager actor that maintains the registry of parking lots and supervises one ParkingLot actor per lot. The manager accepts commands to register and deregister lots, to update occupancy, and to fetch either the status of a specific lot or the complete set of registered lots. Each ParkingLot actor keeps the local state for a single lot, namely current occupancy and maximum capacity, and derives the number of available spaces from those. Occupancy updates are handled as fire-and-forget messages to minimize latency, while status queries are served synchronously using Akka’s ask pattern with typed timeouts to provide deterministic responses.
@@ -151,26 +233,8 @@ a parking space in advance by entering their license plate number and pay.
 We host the web application on a separate EC2 instance from the Akka backend
 using Nginx as a web server.
 
-\section{Limitations}
-
-While the implemented system covers the core functionality of a video license plate parking system, there are several limitations to consider.
-
-One major limitation is the missing authentication and authorization mechanisms. Currently,
-there is no mechanism to verify the identity of parking lot servers when they register with the cloud backend
-or when they send occupancy updates. This could lead to unauthorized entities
-manipulating parking lot data. Implementing secure authentication, such as mutual TLS or API keys, would be necessary for a production system.
-
-Another big limitation is the simplistic hosting setup. The Akka backend is hosted on a single EC2 instance without any load balancing or auto-scaling.
-This setup may not handle high traffic loads or provide sufficient fault tolerance.
-In a production environment, deploying the backend using container orchestration platforms like Amazon ECS
-along with load balancers and auto-scaling, would improve reliability and scalability.
-
-The deployment should be better automated. Currently the setup of the cloud is done using terraform, but 
-the web application bundle and the Akka backend Jar file need to be manually created and pushed to an S3 bucket.
-A more automated CI/CD pipeline using AWS CodePipeline or similar services would streamline deployments and reduce manual
-effort and lower the risk of human error.
-
 \section{Evaluation}
+\label{sec:evaluation}
 
 \subsection{Test Case 1: Cloud Backend Load with Increasing Number of Edge Servers}
 
@@ -283,8 +347,29 @@ Since the camera streams are implemented as fire-and-forget publishers, no round
 
 Overall, this experiment confirms that NATS is well suited for continuous data streaming between IoT devices and edge servers in the proposed system. While this test does not provide latency measurements, it demonstrates that the messaging layer remains stable under realistic camera load and complements the HTTP-based load tests performed on the cloud backend.
 
+\section{Limitations}
+\label{sec:limitations}
+
+While the implemented system covers the core functionality of a video license plate parking system, there are several limitations to consider.
+
+One major limitation is the missing authentication and authorization mechanisms. Currently,
+there is no mechanism to verify the identity of parking lot servers when they register with the cloud backend
+or when they send occupancy updates. This could lead to unauthorized entities
+manipulating parking lot data. Implementing secure authentication, such as mutual TLS or API keys, would be necessary for a production system.
+
+Another big limitation is the simplistic hosting setup. The Akka backend is hosted on a single EC2 instance without any load balancing or auto-scaling.
+This setup may not handle high traffic loads or provide sufficient fault tolerance.
+In a production environment, deploying the backend using container orchestration platforms like Amazon ECS
+along with load balancers and auto-scaling, would improve reliability and scalability.
+
+The deployment should be better automated. Currently the setup of the cloud is done using terraform, but 
+the web application bundle and the Akka backend Jar file need to be manually created and pushed to an S3 bucket.
+A more automated CI/CD pipeline using AWS CodePipeline or similar services would streamline deployments and reduce manual
+effort and lower the risk of human error.
 
 \section{Conclusions and future work}
+\label{sec:conclusion}
+
 Summarize your solution described in this report, as well as honestly mention the current limitations and the areas that could be explored in future work.
 
 \end{document}
