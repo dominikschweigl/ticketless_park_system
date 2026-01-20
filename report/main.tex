@@ -172,7 +172,7 @@ corresponding to an average exit rate of
 \[
 R_\text{exit} = \frac{P_\text{exit}}{\text{FRAME\_DELAY}} \approx 0.028 \text{ cars/second}.
 \]
-This setup results in a parking lot that gradually fills over time, with entries initially outpacing exits.
+This setup results in a parking lot that gradually fills over time, where entries outpacing exits.
 
 \paragraph{Parking Lot Gates and Traffic Light Interface}
 The parking lot gates and traffic lights are simulated via a web-based 
@@ -204,6 +204,15 @@ operational during temporary cloud disconnections, though with some limitations
 at the exit gate due to synchronous payment verification at the cloud. The edge server is 
 implemented in Python, as the employed machine learning models and inference 
 pipelines are exclusively available through Python-based frameworks.
+
+The edge deployment follows the same container-based approach as the IoT layer.
+Both the edge server and the local NATS message broker are executed within 
+Docker containers, and together with the IoT components they are deployed 
+as a single edge application using \texttt{docker-compose}. This setup 
+enables consistent and reproducible
+deployment across different parking facilities, simplifies configuration
+management, and allows the complete edge stack—including processing logic and
+messaging infrastructure—to be started, stopped, and updated as a single unit.
 
 To maintain local state, the edge server uses a lightweight SQLite database. 
 SQLite was selected for its low operational overhead, zero-configuration 
@@ -568,6 +577,30 @@ detection outcomes.
 \section{Conclusions and future work}
 \label{sec:conclusion}
 
-Summarize your solution described in this report, as well as honestly mention the current limitations and the areas that could be explored in future work.
+This paper presented a distributed, ticketless parking system based on 
+automatic license plate recognition, combining edge computing, 
+cloud-based coordination, and a web-based user interface. By processing 
+camera streams locally at the edge and delegating global state management, 
+payments, and bookings to a cloud backend, the system achieves low-latency 
+gate control while maintaining a centralized view of parking availability. 
+The actor-based cloud architecture, NATS messaging, and 
+containerized deployment demonstrate a scalable and modular design 
+suitable for coordinating multiple parking facilities. Experimental 
+evaluation shows that the system performs reliably under moderate load, 
+with stable response times for cloud APIs, web access, and edge messaging.
+
+Several limitations remain and point toward future work. Payment 
+verification currently introduces avoidable latency at the exit gate 
+and could be optimized through proactive propagation of payment events 
+to the edge. Security mechanisms such as authentication and authorization 
+are not yet implemented and would be essential in a production deployment. 
+Cloud scalability and fault tolerance are limited by single-instance 
+components and could be improved through load balancing, auto-scaling, 
+and persistent messaging solutions. Additional challenges include booking 
+race conditions, partial deployment automation, simplified distance 
+calculations, and the use of a pre-trained license plate detection model 
+without environment-specific tuning. Addressing these aspects would 
+further improve robustness, scalability, and real-world applicability 
+of the proposed system.
 
 \end{document}
