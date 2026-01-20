@@ -244,62 +244,56 @@ this low-latency, ephemeral communication model, enabling responsive and
 reliable gate control at the edge.
 
 
-
 \subsection{Cloud Implementation}
 
+In the cloud layer we rely on Akka Typed as the central orchestration 
+mechanism for all parking-lot related functionality. An embedded Akka 
+HTTP server runs within the same ActorSystem and exposes a 
+synchronous HTTP REST API to edge servers and the web application. 
+This is a standard protocol, which makes it easy to provide uniform access
+for edge servers and web clients alike. Internally, the system is entirely 
+message-driven, which provides clear separation of concerns and concurrency.
 
-Regarding our Service choices, the Akka Framework is used in the Cloud 
-Layer as it is mandatory for this assignment. Actors will store their 
-state in a DynamoDB table because we want to ensure reliability even if 
-some server with Akka Actors crashes. The communication from the cloud 
-to the edge server is done through a message queue to make the edge 
-server location transparent for the cloud. The edge server computes 
-the detection algorithm on the video stream and manages the local IoT 
-devices as well as parking data to keep network traffic to the cloud 
-low. This way we only send small messages of detection events with 
-current open capacity to the cloud. Communication from the edge to 
-the cloud Akka Backend does not go through the message queue and 
-instead uses Akka's HTTP REST API. This is because some of the 
-calls to the cloud for information retrieval like a GET request 
-for car payment status fit better as synchronous calls rather 
-than asynchronous messages. Therefore, to have a uniform access 
-point for the edge we will use the REST API also for capacity 
-update events. Though we leave the possibility open to also use 
-the message queue for communication from the edge to the cloud backend.
+At the core sits a typed ParkingLotManager actor that maintains the 
+registry of parking lots and supervises one ParkingLot actor per lot. 
+The manager accepts commands to register and deregister lots, to update 
+occupancy, and to fetch either the status of a specific lot or the 
+complete set of registered lots. Each ParkingLot actor keeps the local 
+state for a single lot. Parking lot edge occupancy updates 
+are handled as fire-and-forget messages to minimize latency, while status 
+queries are served using Akka's ask pattern.
 
-(Akka HTTP) : Edge servers need synchronous immediate responses for certain operations,
-    such as verifying payment status at exit gates or retrieving the list of registered parking lots. For these interactions, we implemented a RESTful HTTP API using Akka HTTP. Edge servers send HTTP requests to specific endpoints exposed by the cloud backend, which processes them and returns appropriate responses. This approach provides a uniform access point for edge servers and web clients alike.
-    Cloud needs to be available at all times for the system to work anyways.
+Payments are handled by a dedicated typed Payment actor that tracks a 
+parking session per license plate. When a car is recorded as having 
+entered, the actor creates or updates the session with the entry time. 
+A payment command marks the session as paid and computes the price based 
+on the parking duration using a simple policy with half-hour increments. 
+At exit, the actor can be asked synchronously to verify whether the car 
+has paid and to return the current price; once the car leaves, the 
+session is deleted to ensure that only currently parked cars are stored,
+which reduces system load.
 
-In the cloud layer we rely on Akka Typed as the central orchestration mechanism for all parking-lot related functionality. An embedded Akka HTTP server runs within the same typed ActorSystem and exposes a synchronous API to edge servers. Internally, the system is entirely message-driven, which gives us clear separation of concerns, robust concurrency, and predictable error handling.
+Bookings are mediated by a Booking actor that acts as the 
+cloud-side gateway to the edge servers. When a booking is created 
+through the API, the actor publishes a to a parking-lot 
+specific NATS subject, which the corresponding edge server subscribes 
+to. This approach decouples the cloud from the physical 
+deployment of edge servers, allowing bookings to be routed while
+the edge network locations transparent to the cloud. When a 
+booking is cancelled, the actor similarly publishes an 
+action “cancel” message. By using an asynchronous message queue, 
+the system remains resilient to temporary connectivity issues. This approach intentionally keeps booking 
+state lightweight in the cloud and delegates the effective reservation 
+and occupancy enforcement to the edge, where the real-world constraints 
+such as maximum occupancy and gate control are managed. The edge server 
+is therefore responsible for enforcing bookings locally and rejecting 
+incoming vehicles when all available parking spaces are already reserved.
 
-At the core sits a typed ParkingLotManager actor that maintains the registry of parking lots and supervises one ParkingLot actor per lot. The manager accepts commands to register and deregister lots, to update occupancy, and to fetch either the status of a specific lot or the complete set of registered lots. Each ParkingLot actor keeps the local state for a single lot, namely current occupancy and maximum capacity, and derives the number of available spaces from those. Occupancy updates are handled as fire-and-forget messages to minimize latency, while status queries are served synchronously using Akka’s ask pattern with typed timeouts to provide deterministic responses.
-
-Payments are handled by a dedicated typed Payment actor that tracks a parking session per license plate. When a car is recorded as having entered, the actor creates or updates the session with the entry time. A payment command marks the session as paid and computes the price based on the parking duration using a simple policy with half-hour increments. At exit, the actor can be asked synchronously to verify whether the car has paid and to return the current price; once the car leaves, the session is deleted to ensure that only currently parked cars are stored.
-
-Bookings are mediated by a typed Booking actor that acts as the cloud-side gateway to the edge servers. When a booking is created through the API, the actor publishes a JSON message containing an action field set to “book” and the license plate to a parking-lot specific NATS subject, which the corresponding edge server subscribes to. When a booking is cancelled, the actor similarly publishes an action “cancel” message. This approach intentionally keeps booking state lightweight in the cloud and delegates the effective reservation and occupancy adjustments to the edge, where the real-world constraints and device control live.
-
-The HTTP API mirrors these responsibilities in a small set of endpoints. Parking-lot management includes an endpoint to register lots, one to deregister, a status endpoint to retrieve current occupancy and capacity, and an endpoint to list all registered lots. Occupancy updates are accepted via a simple POST call and relayed to the appropriate ParkingLot actor without awaiting a reply. The payment flow provides endpoints to record entry, to mark a license plate as paid and return the computed price, to check payment status at the exit, and to delete the session after successful departure. Bookings are exposed through a POST endpoint to create a booking and a DELETE endpoint to cancel it, both of which result in the Booking actor publishing the appropriate NATS messages to the lot-specific subject.
-
-Communication between cloud and edge is deliberately mixed to match the semantics of each interaction. Edge-to-cloud interactions that benefit from synchronous responses—such as retrieving payment status or listing registered lots—use the HTTP API and the ask pattern under the hood. High-frequency, one-way updates—such as occupancy changes—use fire-and-forget messages for minimal overhead. Cloud-to-edge interactions for bookings use NATS publishing because reservations are asynchronous events best handled locally at the edge, and messaging scales naturally across many geographically distributed edge servers while keeping the cloud simple.
-
-Using REST for edge-to-cloud requests provides a uniform access point for edge servers and web servers and is a natural fit for synchronous queries,
-while NATS for cloud-to-edge booking events decouples producers and consumers and keeps the edge authoritative for local capacity
-management. Finally, placing state where it belongs—lot occupancy inside ParkingLot actors, payment sessions inside the Payment actor,
-and booking mediation inside the Booking actor—minimizes side effects and keeps responsibilities clear.
-
-Each ParkingLot actor additionally stores static metadata describing the physical
-location of the car park in the form of latitude and longitude. These coordinates
-are provided during parking-lot registration and are returned as part of the lot
-status via the HTTP API. This allows clients to perform distance calculations and
-routing without requiring external geocoding services.
-
-For the web application, we implemented a web application using React that allows
-users to interact with the parking system. Through this application, users can
-see all registered parking lots, check their current availability, reserve
-a parking space in advance by entering their license plate number and pay.
-We host the web application on a separate EC2 instance from the Akka backend
-using Nginx as a web server.
+For the computation of the closest parking lots based on user location,
+the cloud backend defines a Routing Actor that calculates the
+Haversine distance between the user's coordinates and each parking lot's
+stored geographical location. The actor then sorts the parking lots
+based on this distance and returns the sorted list to the web client.
 
 \subsection{Web Interface}
 
@@ -490,23 +484,6 @@ of secure authentication mechanisms, such as mutual TLS or API
 key based access control, to ensure data integrity and system security.
 
 \paragraph{Cloud Scalability and Availability}
-Another big limitation is the simplistic hosting setup. The cloud 
-components, Nginx webserver, Akka backend, and NATS message broker, 
-are hosted on a single EC2 instance respectively without any load balancing or 
-auto-scaling.
-This setup may not handle high traffic loads or provide sufficient 
-fault tolerance for big systems as each of them represents a single point of failure.
-In a production environment, deploying the cloud components using container 
-orchestration platforms like Amazon ECS
-along with load balancers and auto-scaling, would improve reliability 
-and scalability.
-
-As all communication from the cloud to the edge goes through the NATS message
-broker and messages need to be temporarily stored, the need for heavier 
-message brokers like Apache Kafka could be considered for better scalability
-and fault tolerance. Though for the current system NATS is sufficient.
-
-\paragraph{Cloud Scalability and Availability}
 A further limitation of the current system is the simplicity of the 
 cloud deployment. The cloud components—the Nginx web server, 
 the Akka-based backend, and the NATS message broker—are each hosted 
@@ -528,6 +505,19 @@ however, NATS remains a suitable choice. To prevent loss of critical
 messages, such as booking updates, when an edge server is temporarily 
 disconnected, NATS JetStream could be employed to enable message 
 persistence and reliable delivery.
+
+\paragraph{Booking Race Conditions}
+The current booking implementation does not prevent race conditions 
+when web users and drivers at the entry gate attempt to access the 
+last available 
+parking space simultaneously. For example, a user may reserve the 
+final space through the web interface at the same time a car arrives 
+at the entry gate without a prior booking. If the car enters and 
+the booking request arrives at the cloud before the edge server updates its occupancy, 
+the booking request is still processed successfully by the cloud 
+and forwarded to the edge, resulting in overbooking. To fully prevent 
+such race conditions, the booking process would require explicit 
+confirmation from the edge server before finalizing a reservation.
 
 \paragraph{Deployment Automation}
 The deployment process could benefit from greater automation. While 
