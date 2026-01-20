@@ -444,7 +444,169 @@ single-instance deployment.
 
 
 \subsection{Test Case 2: Web Interface Load Test (Nginx + React)}
-To evaluate the performance of the web interface, we first benchmarked the standalone web server that serves the compiled React frontend. This test was intentionally isolated from the rest of the system components, meaning that neither the Akka cloud backend nor any edge servers were involved. In this setup, the measured latency and throughput mainly reflect the capability of the Nginx server to deliver static frontend assets under concurrent access.
+The goal of this test was to evaluate the performance of the web interface, 
+specifically the ability of the Nginx server to serve a compiled React 
+frontend under concurrent access. This test was 
+intentionally isolated from the rest of the system components, meaning that 
+neither the Akka cloud backend nor any edge servers were involved. In this 
+setup, the measured latency and throughput mainly reflect the capability of 
+the Nginx server to deliver static frontend assets under concurrent access.
+
+The web server under test was hosted at \texttt{http://54.234.138.208}. The 
+test consisted of running a series of load tests at increasing levels of 
+concurrent users, from 100 up to 800. Each test lasted 60 seconds, and the 
+client utilized six CPU threads to issue requests. The objective was to 
+observe how both latency and throughput behaved as the number of simultaneous 
+requests increased, and to identify the point at which the server's 
+performance began to degrade due to resource limitations.
+
+The results of the load tests show a clear trend in the server’s behavior 
+under increasing concurrency. At lower concurrency levels, from 100 to 400 
+users, the server handled requests efficiently, with average latency 
+remaining under half a second and requests per second increasing steadily 
+as more users were added. Beyond 400 concurrent users, the server began to 
+experience connection errors, resulting in higher average latency and 
+reduced throughput. At concurrency levels of 500 and above, 
+many requests failed due to connection attempt timeouts, indicating that 
+the server was overloaded.
+
+\begin{tikzpicture}
+\begin{axis}[
+    width=8cm,
+    height=8cm,
+    xlabel={Concurrent Connections},
+    ylabel={Latency (s)},
+    legend pos=north west,
+    grid=both,
+    ymode=log,
+]
+
+\addplot[color=blue,mark=*] coordinates {
+    (100,0.3474)
+    (200,0.4076)
+    (300,0.4630)
+    (400,0.4898)
+    (500,2.6898)
+    (600,1.7226)
+    (700,1.0864)
+    (800,0.8491)
+};
+\addlegendentry{Average}
+
+\addplot[color=red,mark=square*] coordinates {
+    (100,0.1518)
+    (200,0.1553)
+    (300,0.1578)
+    (400,0.1652)
+    (500,1.4442)
+    (600,1.3316)
+    (700,0.7048)
+    (800,0.3807)
+};
+\addlegendentry{10th percentile}
+
+\addplot[color=green,mark=triangle*] coordinates {
+    (100,0.1690)
+    (200,0.5868)
+    (300,0.6107)
+    (400,0.6181)
+    (500,2.0134)
+    (600,1.8214)
+    (700,1.1882)
+    (800,0.8423)
+};
+\addlegendentry{50th percentile}
+
+\addplot[color=orange,mark=diamond*] coordinates {
+    (100,0.6257)
+    (200,0.6423)
+    (300,0.6952)
+    (400,0.6874)
+    (500,2.7856)
+    (600,1.9335)
+    (700,1.3526)
+    (800,1.2370)
+};
+\addlegendentry{90th percentile}
+
+\addplot[color=purple,mark=pentagon*] coordinates {
+    (100,0.6448)
+    (200,0.6637)
+    (300,0.7179)
+    (400,0.7878)
+    (500,21.0208)
+    (600,2.1648)
+    (700,1.6471)
+    (800,1.5931)
+};
+\addlegendentry{99th percentile}
+
+\end{axis}
+\end{tikzpicture}
+
+
+\begin{tikzpicture}
+% Left axis: 200 OK responses
+\begin{axis}[
+    width=8cm,
+    height=8cm,
+    xlabel={Concurrent Connections},
+    ylabel={Successful 200 OK Responses},
+    ybar,
+    bar width=11pt,
+    xtick=data,
+    symbolic x coords={100,200,300,400,500,600,700,800},
+    grid=major,
+    ymin=0, ymax=55000,
+    legend style={at={(0.2,-0.18)},anchor=north,legend columns=2},
+]
+
+\addplot+[ybar,fill=blue,draw=none,bar shift=-4pt] coordinates {
+    (100,17336)
+    (200,29556)
+    (300,39056)
+    (400,49241)
+    (500,10302)
+    (600,13891)
+    (700,25402)
+    (800,34039)
+};
+\addlegendentry{200 OK}
+
+\end{axis}
+
+% Right axis: Connection Timeouts
+\begin{axis}[
+    width=8cm,
+    height=8cm,
+    xlabel={},
+    ylabel={Connection Timeouts},
+    ylabel near ticks,
+    ybar,
+    bar width=11pt,
+    xtick=data,
+    symbolic x coords={100,200,300,400,500,600,700,800},
+    axis y line*=right,
+    axis x line=none,
+    ymin=0, ymax=900,
+    legend style={at={(0.65,-0.18)},anchor=north,legend columns=2},
+]
+
+\addplot+[ybar,fill=red,draw=none,bar shift=4pt] coordinates {
+    (100,0)
+    (200,0)
+    (300,0)
+    (400,1)
+    (500,126)
+    (600,600)
+    (700,700)
+    (800,800)
+};
+\addlegendentry{Connection Timeout}
+
+\end{axis}
+\end{tikzpicture}
+
 
 We used the \texttt{wrk} benchmarking tool with 4 threads and 100 concurrent connections over a duration of 60 seconds:
 \begin{verbatim}
