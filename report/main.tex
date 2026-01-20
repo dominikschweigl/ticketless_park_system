@@ -254,6 +254,17 @@ This is a standard protocol, which makes it easy to provide uniform access
 for edge servers and web clients alike. Internally, the system is entirely 
 message-driven, which provides clear separation of concerns and concurrency.
 
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=1\linewidth]{assets/actor_structure.png}
+    \caption{
+        Structure of the application-level Akka actor hierarchy in the cloud backend.
+        The user actor is shown as the root of the application-level actors,
+        Akka system and infrastructure actors are omitted for clarity.
+    }
+    \label{fig:actor_structure}
+\end{figure}
+
 At the core sits a typed ParkingLotManager actor that maintains the 
 registry of parking lots and supervises one ParkingLot actor per lot. 
 The manager accepts commands to register and deregister lots, to update 
