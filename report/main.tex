@@ -8,6 +8,8 @@
 \usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{pgfplots}
+\usepackage{placeins}
+
 \pgfplotsset{compat=1.18}
 
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
@@ -367,18 +369,6 @@ up to which load level the cloud backend operates reliably and to
 identify the saturation point at which latency and error rates increase
 rapidly.
 
-\subsubsection*{Test Environment}
-
-The cloud backend was deployed on a single Amazon EC2 t3.micro
-instance. This instance type provides one virtual CPU and 1~GB of RAM
-and relies on a burst-based CPU credit model. No load balancing or
-horizontal scaling was used in order to observe the inherent limits of a
-single-instance Akka-based backend.
-
-The backend exposes a REST-based HTTP API implemented using Akka HTTP
-and Akka Typed actors. All parking-lot state management, payment
-processing and booking coordination are handled within the actor system.
-
 \subsubsection*{Workload Model}
 
 To generate load, a custom asynchronous Python-based load generator was
@@ -457,7 +447,7 @@ The system shows stable and low latency up to approximately
 sharply, indicating the onset of saturation. Further load leads to
 severe overload and queueing collapse.}
 \end{figure}
-
+\FloatBarrier
 The results show three distinct operating regions. For low to moderate
 load levels, the backend scales linearly and maintains a stable tail
 latency below 200~ms. At approximately 420~requests/s, the system reaches
@@ -467,192 +457,110 @@ load reduces the effective throughput and leads to severe degradation in
 both latency and success rate, which is characteristic of overload in
 queue-based systems.
 
-
 \subsection{Test Case 2: Web Interface Load Test (Nginx + React)}
 The goal of this test was to evaluate the performance of the web interface, 
 specifically the ability of the Nginx server to serve a compiled React 
 frontend under concurrent access. This test was 
 intentionally isolated from the rest of the system components, meaning that 
-neither the Akka cloud backend nor any edge servers were involved. In this 
-setup, the measured latency and throughput mainly reflect the capability of 
-the Nginx server to deliver static frontend assets under concurrent access.
+neither the Akka cloud backend nor any edge servers were involved.
 
-The web server under test was hosted at \texttt{http://54.234.138.208}. The 
-test consisted of running a series of load tests at increasing levels of 
-concurrent users, from 100 up to 800. Each test lasted 60 seconds, and the 
-client utilized six CPU threads to issue requests. The objective was to 
-observe how both latency and throughput behaved as the number of simultaneous 
-requests increased, and to identify the point at which the server's 
-performance began to degrade due to resource limitations.
+The web server was evaluated using a step-wise open-loop load test with \texttt{wrk2}. 
+The test script incrementally increases a fixed target request rate (\texttt{-R}) while keeping
+the number of threads and connections constant. Each step consists of a short warmup phase
+followed by a measurement phase, during which achieved throughput is recorded.
 
-The results of the load tests show a clear trend in the server’s behavior 
-under increasing concurrency. At lower concurrency levels, from 100 to 400 
-users, the server handled requests efficiently, with average latency 
-remaining under half a second and requests per second increasing steadily 
-as more users were added. Beyond 400 concurrent users, the server began to 
-experience connection errors, resulting in higher average latency and 
-reduced throughput. At concurrency levels of 500 and above, 
-many requests failed due to connection attempt timeouts, indicating that 
-the server was overloaded.
+Two endpoints were tested independently using identical parameters:
+\begin{itemize}
+  \item the root endpoint (\texttt{/})
+  \item the largest JavaScript bundle served by the frontend
+\end{itemize}
 
+The achieved request rate is plotted against the configured target rate. 
+Deviation from the ideal linear tracking behavior indicates saturation and marks the knee
+of the system.
+
+\begin{figure}[t]
+\centering
 \begin{tikzpicture}
 \begin{axis}[
-    width=8cm,
-    height=8cm,
-    xlabel={Concurrent Connections},
-    ylabel={Latency (s)},
-    legend pos=north west,
-    grid=both,
-    ymode=log,
+  width=\linewidth,
+  height=6cm,
+  grid=both,
+  xlabel={Target rate [req/s]},
+  ylabel={Achieved rate [req/s]},
+  ymin=0,
+  legend style={at={(0.02,0.98)},anchor=north west,draw=none}
 ]
 
-\addplot[color=blue,mark=*] coordinates {
-    (100,0.3474)
-    (200,0.4076)
-    (300,0.4630)
-    (400,0.4898)
-    (500,2.6898)
-    (600,1.7226)
-    (700,1.0864)
-    (800,0.8491)
+% Ideal tracking
+\addplot[dashed] coordinates {
+  (5,5) (10,10) (12,12) (14,14) (16,16)
+  (18,18) (20,20) (22,22) (24,24)
+  (26,26) (28,28) (30,30) (32,32) (34,34)
 };
-\addlegendentry{Average}
+\addlegendentry{Ideal}
 
-\addplot[color=red,mark=square*] coordinates {
-    (100,0.1518)
-    (200,0.1553)
-    (300,0.1578)
-    (400,0.1652)
-    (500,1.4442)
-    (600,1.3316)
-    (700,0.7048)
-    (800,0.3807)
+% Measured
+\addplot[mark=*, thick] coordinates {
+  (5,5.33) (10,9.76) (12,11.96) (14,13.86) (16,15.99)
+  (18,11.52) (20,18.52) (22,19.88) (24,20.12)
+  (26,22.95) (28,23.18) (30,25.88) (32,25.12) (34,13.29)
 };
-\addlegendentry{10th percentile}
-
-\addplot[color=green,mark=triangle*] coordinates {
-    (100,0.1690)
-    (200,0.5868)
-    (300,0.6107)
-    (400,0.6181)
-    (500,2.0134)
-    (600,1.8214)
-    (700,1.1882)
-    (800,0.8423)
-};
-\addlegendentry{50th percentile}
-
-\addplot[color=orange,mark=diamond*] coordinates {
-    (100,0.6257)
-    (200,0.6423)
-    (300,0.6952)
-    (400,0.6874)
-    (500,2.7856)
-    (600,1.9335)
-    (700,1.3526)
-    (800,1.2370)
-};
-\addlegendentry{90th percentile}
-
-\addplot[color=purple,mark=pentagon*] coordinates {
-    (100,0.6448)
-    (200,0.6637)
-    (300,0.7179)
-    (400,0.7878)
-    (500,21.0208)
-    (600,2.1648)
-    (700,1.6471)
-    (800,1.5931)
-};
-\addlegendentry{99th percentile}
+\addlegendentry{Measured}
 
 \end{axis}
 \end{tikzpicture}
+\caption{wrk2 step test results for the root endpoint (\texttt{/}).}
+\label{fig:wrk2-root}
+\end{figure}
 
-
+\begin{figure}[t]
+\centering
 \begin{tikzpicture}
-% Left axis: 200 OK responses
 \begin{axis}[
-    width=8cm,
-    height=8cm,
-    xlabel={Concurrent Connections},
-    ylabel={Successful 200 OK Responses},
-    ybar,
-    bar width=11pt,
-    xtick=data,
-    symbolic x coords={100,200,300,400,500,600,700,800},
-    grid=major,
-    ymin=0, ymax=55000,
-    legend style={at={(0.2,-0.18)},anchor=north,legend columns=2},
+  width=\linewidth,
+  height=6cm,
+  grid=both,
+  xlabel={Target rate [req/s]},
+  ylabel={Achieved rate [req/s]},
+  ymin=0,
+  legend style={at={(0.02,0.98)},anchor=north west,draw=none}
 ]
 
-\addplot+[ybar,fill=blue,draw=none,bar shift=-4pt] coordinates {
-    (100,17336)
-    (200,29556)
-    (300,39056)
-    (400,49241)
-    (500,10302)
-    (600,13891)
-    (700,25402)
-    (800,34039)
+% Ideal tracking
+\addplot[dashed] coordinates {
+  (5,5) (10,10) (12,12) (14,14) (16,16)
+  (18,18) (20,20) (22,22) (24,24)
+  (26,26) (28,28) (30,30) (32,32) (34,34)
 };
-\addlegendentry{200 OK}
+\addlegendentry{Ideal}
 
-\end{axis}
-
-% Right axis: Connection Timeouts
-\begin{axis}[
-    width=8cm,
-    height=8cm,
-    xlabel={},
-    ylabel={Connection Timeouts},
-    ylabel near ticks,
-    ybar,
-    bar width=11pt,
-    xtick=data,
-    symbolic x coords={100,200,300,400,500,600,700,800},
-    axis y line*=right,
-    axis x line=none,
-    ymin=0, ymax=900,
-    legend style={at={(0.65,-0.18)},anchor=north,legend columns=2},
-]
-
-\addplot+[ybar,fill=red,draw=none,bar shift=4pt] coordinates {
-    (100,0)
-    (200,0)
-    (300,0)
-    (400,1)
-    (500,126)
-    (600,600)
-    (700,700)
-    (800,800)
+% Measured
+\addplot[mark=*, thick] coordinates {
+  (5,4.91) (10,8.87) (12,10.14) (14,11.02) (16,12.21)
+  (18,10.33) (20,13.76) (22,14.88) (24,15.02)
+  (26,15.41) (28,15.68) (30,15.92) (32,14.80) (34,11.05)
 };
-\addlegendentry{Connection Timeout}
+\addlegendentry{Measured}
 
 \end{axis}
 \end{tikzpicture}
+\caption{wrk2 step test results for the largest JavaScript bundle.}
+\label{fig:wrk2-js}
+\end{figure}
 
+Figures~\ref{fig:wrk2-root} and~\ref{fig:wrk2-js} plot the achieved request rate against the
+configured target rate. The dashed line represents ideal linear behavior, where the server
+fully tracks the offered load.
 
-We used the \texttt{wrk} benchmarking tool with 4 threads and 100 concurrent connections over a duration of 60 seconds:
-\begin{verbatim}
-wrk -t4 -c100 -d60s http://3.87.5.60
-\end{verbatim}
+At lower request rates, both endpoints closely follow the ideal curve, indicating stable
+operation without saturation. As the target rate increases, the measured throughput deviates
+from linear scaling, marking the knee of the system.
 
-During the test run, the server handled a total of 54{,}162 requests, resulting in an average throughput of 901.89 requests per second. The measured average response latency was 111\,ms, while the maximum observed latency remained below 450\,ms. No failed requests or timeouts were recorded, indicating stable behaviour under this load. Overall, these results suggest that the web server is not a bottleneck for moderate concurrency and can reliably serve a high number of simultaneous users with low latency.
-
-\textbf{High-load attempt.} We additionally attempted a more aggressive load configuration to simulate significantly higher concurrency. Under this extreme setup, the system behaviour became unstable and requests started to time out, which indicates that the current deployment is not configured to sustain such high load without additional scaling or tuning. Since this load level exceeds the expected operating range of our prototype deployment, we primarily use the moderate load test above as the main reference point for the evaluation.
-
-\subsection{Test Case 3: NATS Publish Load Test for Edge Messaging}
-
-In addition to the HTTP-based cloud interface and the web frontend, we evaluated the NATS messaging layer used at the edge of the system. NATS is responsible for transporting continuous camera streams and control messages between IoT devices and edge servers and is therefore critical for real-time operation.
-
-In this test case, we measured how the NATS server handles sustained publish load without request--reply semantics. A dedicated load test client continuously published messages to the entry and exit camera subjects of a single parking lot. Each message had a payload size of approximately 150~KB, which corresponds to compressed image frames used by the simulated cameras. Messages were sent at a rate of 5 messages per second per stream over a duration of 60 seconds.
-
-During the experiment, a total of 299 messages were published for each stream, resulting in nearly 600 published messages overall. No send errors, timeouts or missing subscribers were observed during the test. All messages were accepted by the NATS server, indicating stable operation under continuous load.
-
-Since the camera streams are implemented as fire-and-forget publishers, no round-trip latency was measured in this test. Instead, the focus was on message throughput and delivery reliability. The results show that the NATS server can reliably handle sustained streaming traffic at the edge without message loss or instability.
-
-Overall, this experiment confirms that NATS is well suited for continuous data streaming between IoT devices and edge servers in the proposed system. While this test does not provide latency measurements, it demonstrates that the messaging layer remains stable under realistic camera load and complements the HTTP-based load tests performed on the cloud backend.
+The root endpoint maintains linear scaling up to a higher request rate, while the JavaScript
+bundle reaches saturation earlier. This is expected due to the higher bandwidth and I/O
+requirements of serving large static assets. Beyond the knee, increasing the offered load
+does not result in higher throughput.
 
 \section{Limitations}
 \label{sec:limitations}
