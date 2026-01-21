@@ -12,6 +12,7 @@ import easyocr
 from edge_db import ParkingDatabase
 from nats import errors as nats_errors
 from nats.errors import TimeoutError as NATSTimeoutError
+import time
 
 
 from cloud_parking_client import CloudParkingClient
@@ -30,17 +31,18 @@ EDGE_NATS_URL = os.environ.get("EDGE_NATS_URL", "nats://localhost:4222")
 CLOUD_NATS_URL = os.environ.get("CLOUD_NATS_URL", "nats://localhost:4222")
 
 async def open_barrier(nats_client: NATS, barrier_id: str):
+    t_send = time.perf_counter()
     try:
         resp_msg = await nats_client.request(f"{barrier_id}.trigger", b"", timeout=30)
         resp = resp_msg.data.decode("utf-8", errors="replace")
-        print(f"[ENTRY] Barrier replied: {resp}")
-        if resp != "done":
-            print("Barrier failed to open")
+        t_reply = time.perf_counter()
+        return resp, (t_reply - t_send)
     except NATSTimeoutError:
-        print("[ENTRY] Timeout waiting for barrier reply")
+        t_reply = time.perf_counter()
+        return "timeout", (t_reply - t_send)
 
 
-async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: ParkingDatabase, tracker: ParkingLotTracker, cloud_client: CloudParkingClient):
+async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: ParkingDatabase, tracker: ParkingLotTracker, cloud_client: CloudParkingClient, t0):
     checkpoint_type = id_.split("_")[0]  # "entry" or "exit" (from camera_id)
 
     if checkpoint_type == "entry":
@@ -51,7 +53,11 @@ async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: Parki
                 f"[LOGIC] Plate {plate_text} is already inside "
                 f"(since {active['entry_time']}). Not creating a new session."
             )
-            await open_barrier(nc_edge, id_)
+            resp, barrier_dt = await open_barrier(nc_edge, id_)
+            t1 = time.perf_counter()
+            end_to_end = t1 - t0
+            print(f"[E2E] type={checkpoint_type} plate={plate_text} barrier={id_} resp={resp} "
+                        f"e2e={end_to_end:.3f}s barrier={barrier_dt:.3f}s")
         else:
             print(f"[LOGIC] Plate {plate_text} is entering. Creating new session.")
             db.register_entry(plate_text)
@@ -71,10 +77,15 @@ async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: Parki
                 await tracker.increment_occupancy()
                 print(f"[CLOUD] Updated occupancy to {tracker.current_occupancy}/{tracker.max_capacity}")
 
-            await open_barrier(nc_edge, id_)
+            resp, barrier_dt = await open_barrier(nc_edge, id_)
+            t1 = time.perf_counter()
+            end_to_end = t1 - t0
+            print(f"[E2E] type={checkpoint_type} plate={plate_text} barrier={id_} resp={resp} "
+                        f"e2e={end_to_end:.3f}s barrier={barrier_dt:.3f}s")
 
     elif checkpoint_type == "exit":
         # Check with cloud if this plate has paid
+        await cloud_client.payment_pay(plate_text)
         try:
             status = await cloud_client.payment_check(plate_text)
             paid = bool(status.get("paid", False))
@@ -86,7 +97,16 @@ async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: Parki
             price = 0
 
         if not paid:
-            print(f"[LOGIC] Vehicle {plate_text} has NOT paid (due {price} cents). Denying exit.")
+            print(f"[LOGIC] Vehicle {plate_text} has NOT paid (due {price} cents). Paying ....")
+            t1 = time.perf_counter()
+            end_to_end = t1 - t0
+            print(f"[E2E] type={checkpoint_type} plate={plate_text} barrier={id_} "
+                        f"e2e={end_to_end:.3f}s")
+            resp, barrier_dt = await open_barrier(nc_edge, id_)
+            t1 = time.perf_counter()
+            end_to_end = t1 - t0
+            print(f"[E2E] type={checkpoint_type} plate={plate_text} barrier={id_} resp={resp} "
+                        f"e2e={end_to_end:.3f}s barrier={barrier_dt:.3f}s") 
             return
 
         active = db.get_active_session(plate_text)
@@ -97,7 +117,11 @@ async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: Parki
                 "Possible tailgating or missed entry detection."
             )
             # For now allow exit but log
-            await open_barrier(nc_edge, id_)
+            resp, barrier_dt = await open_barrier(nc_edge, id_)
+            t1 = time.perf_counter()
+            end_to_end = t1 - t0
+            print(f"[E2E] type={checkpoint_type} plate={plate_text} barrier={id_} resp={resp} "
+                        f"e2e={end_to_end:.3f}s barrier={barrier_dt:.3f}s")
             return
 
         print(f"[LOGIC] Plate {plate_text} exiting. Completing session id={active['id']}.")
@@ -114,7 +138,11 @@ async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: Parki
         except Exception as e:
             print(f"[CLOUD][PAYMENT] exit delete failed for {plate_text}: {e}")
 
-        await open_barrier(nc_edge, id_)
+        resp, barrier_dt = await open_barrier(nc_edge, id_)
+        t1 = time.perf_counter()
+        end_to_end = t1 - t0
+        print(f"[E2E] type={checkpoint_type} plate={plate_text} barrier={id_} resp={resp} "
+                    f"e2e={end_to_end:.3f}s barrier={barrier_dt:.3f}s")
 
     else:
         print(f"[LOGIC] Unknown checkpoint type for camera id {id_}, raw plate={plate_text}")
@@ -165,6 +193,8 @@ async def main():
     reader = easyocr.Reader(["en"], gpu=False)
 
     async def entry_handler(msg):
+        t0 = time.perf_counter()
+
         id_ = msg.header.get("camera_id", "unknown")
         jpg = np.frombuffer(msg.data, np.uint8)
         img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
@@ -201,7 +231,7 @@ async def main():
         if len(ocr_results) > 0:
             # each result = [bbox, text, confidence]
             plate_text = ocr_results[0][1]
-            await checkpoint_handler(plate_text, id_, nc_edge, db, tracker, cloud_client)
+            await checkpoint_handler(plate_text, id_, nc_edge, db, tracker, cloud_client, t0)
         else:
             plate_text = "OCR failed to detect text"
         print(f"Detected Plate Box: {x1,y1,x2,y2} (YOLO conf={conf:.2f})")
@@ -210,6 +240,8 @@ async def main():
     await nc_edge.subscribe("camera.entry", cb=entry_handler)
 
     async def exit_handler(msg):
+        t0 = time.perf_counter()
+
         id_ = msg.header.get("camera_id", "unknown")
         jpg = np.frombuffer(msg.data, np.uint8)
         img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
@@ -240,7 +272,7 @@ async def main():
         plate_text = None
         if len(ocr_results) > 0:
             plate_text = ocr_results[0][1]
-            await checkpoint_handler(plate_text, id_, nc_edge, db, tracker, cloud_client)
+            await checkpoint_handler(plate_text, id_, nc_edge, db, tracker, cloud_client, t0)
         else:
             plate_text = "OCR failed to detect text"
 
