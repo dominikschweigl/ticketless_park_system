@@ -100,9 +100,9 @@ public class ParkingHttpServer {
      */
     private Route createRoutes() {
         return concat(
-            path("health", this::healthCheck),
-            pathPrefix("api", () -> concat(
-                path("occupancy", () ->
+            path(segment("health"), this::healthCheck),
+            pathPrefix(segment("api"), () -> concat(
+                path(segment("occupancy"), () ->
                     post(() ->
                         extractRequestEntity(entity ->
                             onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem),
@@ -111,7 +111,7 @@ public class ParkingHttpServer {
                         )
                     )
                 ),
-                pathPrefix("parking-lots", () -> concat(
+                pathPrefix(segment("parking-lots"), () -> concat(
                     pathEnd(() -> concat(
                         get(this::getRegisteredParkingLots),
                         post(() ->
@@ -122,12 +122,25 @@ public class ParkingHttpServer {
                             )
                         )
                     )),
+                    path(segment("nearby"), () ->
+                        get(() ->
+                            parameter("lat", latStr ->
+                                parameter("lng", lngStr ->
+                                    parameterOptional("limit", limitOpt ->
+                                        parameterOptional("onlyAvailable", onlyAvailOpt ->
+                                            getNearbyParkingLots(latStr, lngStr, limitOpt, onlyAvailOpt)
+                                        )
+                                    )
+                                )
+                            )
+                        )
+                    ),
                     path(segment(), parkId -> concat(
                         get(() -> getParkingLotStatus(parkId)),
                         delete(() -> deregisterParkingLot(parkId))
                     ))
                 )),
-                pathPrefix("bookings", () -> concat(
+                pathPrefix(segment("bookings"), () -> concat(
                     // Create booking
                     post(() -> extractRequestEntity(entity -> onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem), strict ->
                         createBooking(strict.getData().utf8String())
@@ -138,25 +151,25 @@ public class ParkingHttpServer {
                         cancelBooking(strict.getData().utf8String())
                     )))
                 )),
-                pathPrefix("payment", () -> concat(
+                pathPrefix(segment("payment"), () -> concat(
                     // Car enters: record entry timestamp
-                    path("enter", () -> post(() ->
+                    path(segment("enter"), () -> post(() ->
                         extractRequestEntity(entity -> onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem), strict ->
                             carEnter(strict.getData().utf8String())
                         ))
                     )),
                     // Pay: mark as paid, compute price
-                    path("pay", () -> post(() ->
+                    path(segment("pay"), () -> post(() ->
                         extractRequestEntity(entity -> onSuccess(() -> entity.toStrict(ENTITY_TIMEOUT_MS, actorSystem), strict ->
                             pay(strict.getData().utf8String())
                         ))
                     )),
                     // Check on leave: verify payment and give price
-                    path("check", () -> get(() ->
+                    path(segment("check"), () -> get(() ->
                         parameter("licensePlate", lp -> checkOnLeave(lp))
                     )),
                     // Delete record after exit
-                    path("exit", () -> delete(() ->
+                    path(segment("exit"), () -> delete(() ->
                         parameter("licensePlate", lp -> deleteOnExit(lp))
                     ))
                 ))
@@ -212,6 +225,88 @@ public class ParkingHttpServer {
                     .withEntity(ContentTypes.APPLICATION_JSON, json));
         });
     }
+
+
+    /**
+     * Get nearby parking lots sorted by distance.
+     * GET /api/parking-lots/nearby?lat=..&lng=..&limit=10&onlyAvailable=true
+     */
+    private Route getNearbyParkingLots(String latStr, String lngStr,
+                                       java.util.Optional<String> limitOpt,
+                                       java.util.Optional<String> onlyAvailOpt) {
+
+        final double userLat;
+        final double userLng;
+        final int limit = limitOpt.map(Integer::parseInt).orElse(10);
+        final boolean onlyAvailable = onlyAvailOpt.map(Boolean::parseBoolean).orElse(true);
+
+        try {
+            userLat = Double.parseDouble(latStr);
+            userLng = Double.parseDouble(lngStr);
+        } catch (Exception e) {
+            return complete(StatusCodes.BAD_REQUEST, "lat/lng must be valid numbers");
+        }
+
+        CompletionStage<RegisteredParksListMessage> regFut = AskPattern.ask(
+                parkingLotManager,
+                (ActorRef<RegisteredParksListMessage> replyTo) -> new ParkingLotManagerActor.GetRegistered(replyTo),
+                ASK_TIMEOUT,
+                scheduler
+        );
+
+        CompletionStage<String> jsonFut = regFut.thenCompose(reg -> {
+            java.util.List<java.util.concurrent.CompletableFuture<NearbyLot>> futures = new java.util.ArrayList<>();
+
+            for (String parkId : reg.getParks().keySet()) {
+                CompletionStage<ParkingLotStatusMessage> stStage = AskPattern.ask(
+                        parkingLotManager,
+                        (ActorRef<ParkingLotStatusMessage> replyTo) -> new ParkingLotManagerActor.GetStatus(parkId, replyTo),
+                        ASK_TIMEOUT,
+                        scheduler
+                );
+
+                java.util.concurrent.CompletableFuture<NearbyLot> lotF = stStage.thenApply(status -> {
+                    double distM = haversineMeters(userLat, userLng, status.getLat(), status.getLng());
+                    return new NearbyLot(
+                            status.getParkId(),
+                            status.getLat(),
+                            status.getLng(),
+                            status.getMaxCapacity(),
+                            status.getCurrentOccupancy(),
+                            status.getAvailableSpaces(),
+                            distM
+                    );
+                }).toCompletableFuture();
+
+                futures.add(lotF);
+            }
+
+            return java.util.concurrent.CompletableFuture
+                    .allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0]))
+                    .thenApply(v -> {
+                        java.util.stream.Stream<NearbyLot> stream = futures.stream()
+                                .map(java.util.concurrent.CompletableFuture::join);
+
+                        if (onlyAvailable) {
+                            stream = stream.filter(l -> l.availableSpaces > 0);
+                        }
+
+                        java.util.List<NearbyLot> out = stream
+                                .sorted(java.util.Comparator.comparingDouble(l -> l.distanceMeters))
+                                .limit(limit)
+                                .collect(java.util.stream.Collectors.toList());
+
+                        return gson.toJson(new NearbyResponse(out));
+                    });
+        });
+
+        return onSuccess(jsonFut, json ->
+                complete(HttpResponse.create()
+                        .withStatus(StatusCodes.OK)
+                        .withEntity(ContentTypes.APPLICATION_JSON, json))
+        );
+    }
+
 
     /**
      * Register a new parking lot.
@@ -430,6 +525,54 @@ public class ParkingHttpServer {
             return complete(StatusCodes.BAD_REQUEST, "Invalid JSON");
         }
     }
+
+
+    // Nearby parking-lot DTOs
+    public static class NearbyLot {
+        public String parkId;
+        public int maxCapacity;
+        public int currentOccupancy;
+        public int availableSpaces;
+        public double lat;
+        public double lng;
+        public double distanceMeters;
+
+        public NearbyLot(String parkId,
+                         double lat,
+                         double lng,
+                         int maxCapacity,
+                         int currentOccupancy,
+                         int availableSpaces,
+                         double distanceMeters) {
+            this.parkId = parkId;
+            this.lat = lat;
+            this.lng = lng;
+            this.maxCapacity = maxCapacity;
+            this.currentOccupancy = currentOccupancy;
+            this.availableSpaces = availableSpaces;
+            this.distanceMeters = distanceMeters;
+        }
+    }
+
+    public static class NearbyResponse {
+        public java.util.List<NearbyLot> results;
+        public NearbyResponse(java.util.List<NearbyLot> results) { this.results = results; }
+    }
+
+    // Haversine (great-circle) distance in meters
+    private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
+        final double R = 6371000.0; // meters
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
 
     // DTOs for HTTP requests/responses
     public static class RegisterParkRequest { public String parkId; public int maxCapacity; public double lat; public double lng;}
