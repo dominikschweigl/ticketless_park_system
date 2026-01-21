@@ -234,7 +234,7 @@ export const FindAndBookView = ({ showNotification }) => {
           <div>
             <h2 className="text-3xl font-bold text-slate-800">Find Parking</h2>
             <p className="text-slate-500">
-              Distances are computed by the backend (nearby endpoint).
+              Enable your location to quickly see the closest available parking spots.
             </p>
           </div>
 
