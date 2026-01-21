@@ -167,18 +167,18 @@ The barrier controller simulates physical parking barriers at entry and exit poi
 #### Communication Protocol
 
 - Subscribes to `{BARRIER_ID}.trigger` NATS subject
-- Receives barrier open requests from edge server
+- Receives barrier trigger that leads to state transition (open to closed, closed to open)
 - Sends acknowledgment response back
 - Uses request-reply pattern for reliable communication
 
 #### Sensor Simulation
 
-The barrier includes two virtual sensors:
+A real world implementation would include Sensors for object detection as:
 
 - **detect_vehicle**: Light sensor positioned before the barrier
 - **vehicle_passed**: Sensor behind the barrier to confirm passage
 
-These sensors enable automatic barrier closing after vehicle passage.
+These sensors enable automatic barrier closing after vehicle passage and are mocked in this code.
 
 ### Configuration
 
@@ -203,15 +203,16 @@ python src/ticketless_parking_system/IoT/barrier/barrier.py
 
 ### Overview
 
-A FastAPI-based web dashboard that provides real-time monitoring of the parking system. It displays live camera feeds and barrier states through WebSocket connections.
+A FastAPI-based web dashboard that provides real-time monitoring of the parking system. It displays live camera feeds and barrier states by subscribing and listening to nats communication between IOT-components.
 
 ### How It Works
 
 #### WebSocket Server
 
 - Serves on port 8000
-- Broadcasts real-time updates to all connected clients
-- Maintains last known state for new connections
+- listens on any camera/barrier_id.* topic
+- creates a card for every actively communicating camera+barrier composition
+- displays camera input and a figurative picture for the barrier state
 
 #### NATS Subscriptions
 
@@ -241,8 +242,6 @@ python src/ticketless_parking_system/IoT/dashboard/dashboard.py
 ### Access
 
 - Open browser to `http://localhost:8000`
-- Real-time updates via WebSocket at `ws://localhost:8000/ws`
-- Static assets served from `static/` directory
 
 ## Edge Server
 
