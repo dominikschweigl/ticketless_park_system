@@ -1,0 +1,166 @@
+{
+  "config": {
+    "base_url": "http://35.175.244.211:8080",
+    "edges": 10,
+    "max_capacity": 67,
+    "step_duration": 90,
+    "warmup": 10.0,
+    "cooldown": 2.0,
+    "steps": "10,20,30,40,45,48,50,52,54,56,58,60,70",
+    "timeout": 5.0,
+    "inflight": 4000,
+    "occ_workers_per_edge": 2,
+    "poisson": true,
+    "include_payment": true,
+    "payment_sessions_per_sec": 6.0,
+    "payment_checks": 3,
+    "payment_check_interval": 1.0,
+    "out": "knee_full",
+    "keep_parking_lots": false
+  },
+  "summary": [
+    {
+      "step": 1,
+      "updates_per_sec_per_edge": 10.0,
+      "target_occ_rps": 100.0,
+      "actual_occ_rps": 99.24156408342317,
+      "actual_total_rps": 132.6479838728509,
+      "success_rate": 100.0,
+      "timeouts": 0,
+      "p95_ms": 127.24192940040665,
+      "p99_ms": 256.63714721960866
+    },
+    {
+      "step": 2,
+      "updates_per_sec_per_edge": 20.0,
+      "target_occ_rps": 200.0,
+      "actual_occ_rps": 197.99483726226987,
+      "actual_total_rps": 233.3518476676512,
+      "success_rate": 100.0,
+      "timeouts": 0,
+      "p95_ms": 126.48719940061709,
+      "p99_ms": 178.55063911985815
+    },
+    {
+      "step": 3,
+      "updates_per_sec_per_edge": 30.0,
+      "target_occ_rps": 300.0,
+      "actual_occ_rps": 295.8585136331453,
+      "actual_total_rps": 330.71613838445074,
+      "success_rate": 100.0,
+      "timeouts": 0,
+      "p95_ms": 146.40965559992765,
+      "p99_ms": 235.440525760059
+    },
+    {
+      "step": 4,
+      "updates_per_sec_per_edge": 40.0,
+      "target_occ_rps": 400.0,
+      "actual_occ_rps": 382.1781589565716,
+      "actual_total_rps": 418.2452269914959,
+      "success_rate": 99.12178605438578,
+      "timeouts": 332,
+      "p95_ms": 3098.410385149964,
+      "p99_ms": 5400.828813599838
+    },
+    {
+      "step": 5,
+      "updates_per_sec_per_edge": 45.0,
+      "target_occ_rps": 450.0,
+      "actual_occ_rps": 396.29363134305095,
+      "actual_total_rps": 425.0954172603243,
+      "success_rate": 79.55742353656066,
+      "timeouts": 8074,
+      "p95_ms": 6841.376753500299,
+      "p99_ms": 7421.587879350318
+    },
+    {
+      "step": 6,
+      "updates_per_sec_per_edge": 48.0,
+      "target_occ_rps": 480.0,
+      "actual_occ_rps": 283.4668207181761,
+      "actual_total_rps": 297.64602496742026,
+      "success_rate": 51.29846679142454,
+      "timeouts": 14834,
+      "p95_ms": 17285.340629299844,
+      "p99_ms": 17689.044847939604
+    },
+    {
+      "step": 7,
+      "updates_per_sec_per_edge": 50.0,
+      "target_occ_rps": 500.0,
+      "actual_occ_rps": 188.8033487544381,
+      "actual_total_rps": 196.84467113653736,
+      "success_rate": 50.248320186970496,
+      "timeouts": 10218,
+      "p95_ms": 30264.879408599652,
+      "p99_ms": 31045.88798559965
+    },
+    {
+      "step": 8,
+      "updates_per_sec_per_edge": 52.0,
+      "target_occ_rps": 520.0,
+      "actual_occ_rps": 122.95359914912837,
+      "actual_total_rps": 128.34169390696866,
+      "success_rate": 47.423461655046985,
+      "timeouts": 6938,
+      "p95_ms": 37176.927950750265,
+      "p99_ms": 38487.64400810014
+    },
+    {
+      "step": 9,
+      "updates_per_sec_per_edge": 54.0,
+      "target_occ_rps": 540.0,
+      "actual_occ_rps": 80.44908493116004,
+      "actual_total_rps": 83.2739448452201,
+      "success_rate": 45.954550444615215,
+      "timeouts": 4923,
+      "p95_ms": 62464.55000220031,
+      "p99_ms": 63982.767028279595
+    },
+    {
+      "step": 10,
+      "updates_per_sec_per_edge": 56.0,
+      "target_occ_rps": 560.0,
+      "actual_occ_rps": 67.47907992369231,
+      "actual_total_rps": 69.65067359847275,
+      "success_rate": 44.29160935350757,
+      "timeouts": 4860,
+      "p95_ms": 60870.47952375001,
+      "p99_ms": 61846.371453779684
+    },
+    {
+      "step": 11,
+      "updates_per_sec_per_edge": 58.0,
+      "target_occ_rps": 580.0,
+      "actual_occ_rps": 66.9489089135419,
+      "actual_total_rps": 68.76687393120946,
+      "success_rate": 41.88904058582599,
+      "timeouts": 4682,
+      "p95_ms": 66575.66352939975,
+      "p99_ms": 68172.88652215993
+    },
+    {
+      "step": 12,
+      "updates_per_sec_per_edge": 60.0,
+      "target_occ_rps": 600.0,
+      "actual_occ_rps": 73.76298938418867,
+      "actual_total_rps": 76.28029775206177,
+      "success_rate": 45.400723604867885,
+      "timeouts": 4980,
+      "p95_ms": 52414.45580599975,
+      "p99_ms": 52583.09947360012
+    },
+    {
+      "step": 13,
+      "updates_per_sec_per_edge": 70.0,
+      "target_occ_rps": 700.0,
+      "actual_occ_rps": 60.79834761285654,
+      "actual_total_rps": 62.485719301427416,
+      "success_rate": 42.17728263502059,
+      "timeouts": 4775,
+      "p95_ms": 63921.037500050305,
+      "p99_ms": 64253.61380255969
+    }
+  ]
+}

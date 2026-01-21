@@ -1,0 +1,161 @@
+{
+  "step": {
+    "updates_per_sec_per_edge": 45.0,
+    "target_occupancy_rps": 450.0,
+    "occ_workers_per_edge": 2,
+    "inflight_limit": 4000,
+    "payment_sessions_per_sec_total": 6.0,
+    "payment_checks": 3,
+    "payment_check_interval_s": 1.0,
+    "poisson_arrivals": true,
+    "warmup_s": 10.0,
+    "measured_duration_s": 90
+  },
+  "time": {
+    "started_epoch": 1768950142.9423616,
+    "ended_epoch": 1768950246.0883262,
+    "measured_elapsed_s": 92.91090516699933
+  },
+  "rates": {
+    "actual_total_rps": 425.0954172603243,
+    "actual_occupancy_rps": 396.29363134305095,
+    "actual_payment_rps": 27.833115987320202,
+    "actual_health_rps": 0.9686699299531393
+  },
+  "overall": {
+    "total_requests": 39496,
+    "ok": 31422,
+    "fail": 8074,
+    "timeouts": 8074,
+    "success_rate": 79.55742353656066,
+    "latency_ms": {
+      "avg": 3865.8283116547514,
+      "p50": 4258.479483499741,
+      "p95": 6841.376753500299,
+      "p99": 7421.587879350318,
+      "max": 7650.736331000189
+    }
+  },
+  "endpoints": {
+    "GET /health": {
+      "name": "GET /health",
+      "count": 90,
+      "ok": 70,
+      "fail": 20,
+      "timeouts": 20,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": 3937.3309259222374,
+      "p50_ms": 4375.03155450031,
+      "p95_ms": 6969.552130400507,
+      "p99_ms": 7380.1873719298055,
+      "max_ms": 7417.176005999863
+    },
+    "POST /api/parking-lots": {
+      "name": "POST /api/parking-lots",
+      "count": 0,
+      "ok": 0,
+      "fail": 0,
+      "timeouts": 0,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": null,
+      "p50_ms": NaN,
+      "p95_ms": NaN,
+      "p99_ms": NaN,
+      "max_ms": null
+    },
+    "DELETE /api/parking-lots/{id}": {
+      "name": "DELETE /api/parking-lots/{id}",
+      "count": 0,
+      "ok": 0,
+      "fail": 0,
+      "timeouts": 0,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": null,
+      "p50_ms": NaN,
+      "p95_ms": NaN,
+      "p99_ms": NaN,
+      "max_ms": null
+    },
+    "POST /api/occupancy": {
+      "name": "POST /api/occupancy",
+      "count": 36820,
+      "ok": 29341,
+      "fail": 7479,
+      "timeouts": 7479,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": 3857.054523983028,
+      "p50_ms": 4253.132426999855,
+      "p95_ms": 6840.68133350006,
+      "p99_ms": 7423.147935820325,
+      "max_ms": 7650.736331000189
+    },
+    "POST /api/payment/enter": {
+      "name": "POST /api/payment/enter",
+      "count": 497,
+      "ok": 404,
+      "fail": 93,
+      "timeouts": 93,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": 3766.6076603581623,
+      "p50_ms": 4126.188121999803,
+      "p95_ms": 6842.64534440008,
+      "p99_ms": 7414.758758719764,
+      "max_ms": 7490.183612000692
+    },
+    "GET /api/payment/check": {
+      "name": "GET /api/payment/check",
+      "count": 1336,
+      "ok": 1036,
+      "fail": 300,
+      "timeouts": 300,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": 4003.7575667155616,
+      "p50_ms": 4271.475615500549,
+      "p95_ms": 6887.546222249739,
+      "p99_ms": 7410.186224249992,
+      "max_ms": 7629.977397000403
+    },
+    "POST /api/payment/pay": {
+      "name": "POST /api/payment/pay",
+      "count": 392,
+      "ok": 294,
+      "fail": 98,
+      "timeouts": 98,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": 4146.405702936206,
+      "p50_ms": 4398.307942999963,
+      "p95_ms": 6777.91355714994,
+      "p99_ms": 7386.877542890624,
+      "max_ms": 7494.587913999567
+    },
+    "DELETE /api/payment/exit": {
+      "name": "DELETE /api/payment/exit",
+      "count": 361,
+      "ok": 277,
+      "fail": 84,
+      "timeouts": 84,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": 4064.3559247839416,
+      "p50_ms": 4387.409939999998,
+      "p95_ms": 6657.849408999937,
+      "p99_ms": 7327.761522799847,
+      "max_ms": 7423.946336000881
+    }
+  }
+}

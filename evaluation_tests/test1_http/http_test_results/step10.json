@@ -1,0 +1,161 @@
+{
+  "step": {
+    "updates_per_sec_per_edge": 56.0,
+    "target_occupancy_rps": 560.0,
+    "occ_workers_per_edge": 2,
+    "inflight_limit": 4000,
+    "payment_sessions_per_sec_total": 6.0,
+    "payment_checks": 3,
+    "payment_check_interval_s": 1.0,
+    "poisson_arrivals": true,
+    "warmup_s": 10.0,
+    "measured_duration_s": 90
+  },
+  "time": {
+    "started_epoch": 1768950752.9602327,
+    "ended_epoch": 1768950911.2551105,
+    "measured_elapsed_s": 125.25363430499965
+  },
+  "rates": {
+    "actual_total_rps": 69.65067359847275,
+    "actual_occupancy_rps": 67.47907992369231,
+    "actual_payment_rps": 1.4690192505867705,
+    "actual_health_rps": 0.7025744241936729
+  },
+  "overall": {
+    "total_requests": 8724,
+    "ok": 3864,
+    "fail": 4860,
+    "timeouts": 4860,
+    "success_rate": 44.29160935350757,
+    "latency_ms": {
+      "avg": 42797.91720968776,
+      "p50": 42792.21966049999,
+      "p95": 60870.47952375001,
+      "p99": 61846.371453779684,
+      "max": 62053.24541400023
+    }
+  },
+  "endpoints": {
+    "GET /health": {
+      "name": "GET /health",
+      "count": 88,
+      "ok": 50,
+      "fail": 38,
+      "timeouts": 38,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": 47606.2916475228,
+      "p50_ms": 49882.008708000285,
+      "p95_ms": 60183.38316940012,
+      "p99_ms": 61593.10653984987,
+      "max_ms": 61912.57701700033
+    },
+    "POST /api/parking-lots": {
+      "name": "POST /api/parking-lots",
+      "count": 0,
+      "ok": 0,
+      "fail": 0,
+      "timeouts": 0,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": null,
+      "p50_ms": NaN,
+      "p95_ms": NaN,
+      "p99_ms": NaN,
+      "max_ms": null
+    },
+    "DELETE /api/parking-lots/{id}": {
+      "name": "DELETE /api/parking-lots/{id}",
+      "count": 0,
+      "ok": 0,
+      "fail": 0,
+      "timeouts": 0,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": null,
+      "p50_ms": NaN,
+      "p95_ms": NaN,
+      "p99_ms": NaN,
+      "max_ms": null
+    },
+    "POST /api/occupancy": {
+      "name": "POST /api/occupancy",
+      "count": 8452,
+      "ok": 3706,
+      "fail": 4746,
+      "timeouts": 4746,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": 42788.126488526264,
+      "p50_ms": 42774.21150800001,
+      "p95_ms": 60907.968802400224,
+      "p99_ms": 61848.10141684996,
+      "max_ms": 62053.24541400023
+    },
+    "POST /api/payment/enter": {
+      "name": "POST /api/payment/enter",
+      "count": 165,
+      "ok": 97,
+      "fail": 68,
+      "timeouts": 68,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": 40156.44492987878,
+      "p50_ms": 42276.85981600007,
+      "p95_ms": 58425.82269339963,
+      "p99_ms": 59146.14681124003,
+      "max_ms": 59322.90214099976
+    },
+    "GET /api/payment/check": {
+      "name": "GET /api/payment/check",
+      "count": 19,
+      "ok": 11,
+      "fail": 8,
+      "timeouts": 8,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": 47821.977783157934,
+      "p50_ms": 46589.03096599988,
+      "p95_ms": 57768.27630930047,
+      "p99_ms": 57787.866381060434,
+      "max_ms": 57792.76389900042
+    },
+    "POST /api/payment/pay": {
+      "name": "POST /api/payment/pay",
+      "count": 0,
+      "ok": 0,
+      "fail": 0,
+      "timeouts": 0,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": null,
+      "p50_ms": NaN,
+      "p95_ms": NaN,
+      "p99_ms": NaN,
+      "max_ms": null
+    },
+    "DELETE /api/payment/exit": {
+      "name": "DELETE /api/payment/exit",
+      "count": 0,
+      "ok": 0,
+      "fail": 0,
+      "timeouts": 0,
+      "http_4xx": 0,
+      "http_5xx": 0,
+      "other_err": 0,
+      "avg_ms": null,
+      "p50_ms": NaN,
+      "p95_ms": NaN,
+      "p99_ms": NaN,
+      "max_ms": null
+    }
+  }
+}
