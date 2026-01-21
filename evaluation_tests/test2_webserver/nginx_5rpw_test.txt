@@ -1,0 +1,483 @@
+Test for Nginx
+
+
+=== Completed test at ~100 RPS ===
+
+
+=== Running hey test at ~500 RPS ===
+Target: http://3.85.143.151 | Duration: 60s | RPS: 500 | Concurrency cap: 100 | Per-worker RPS: 5 | CPUs: 6
+
+
+Summary:
+  Total:        60.1905 secs
+  Slowest:      0.6705 secs
+  Fastest:      0.1309 secs
+  Average:      0.2084 secs
+  Requests/sec: 421.6778
+
+  Total data:   12588976 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.131 [1]     |
+  0.185 [21683] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.239 [1219]  |■■
+  0.293 [1]     |
+  0.347 [99]    |
+  0.401 [0]     |
+  0.455 [0]     |
+  0.509 [0]     |
+  0.563 [133]   |
+  0.617 [2129]  |■■■■
+  0.670 [116]   |
+
+
+Latency distribution:
+  10%% in 0.1566 secs
+  25%% in 0.1615 secs
+  50%% in 0.1683 secs
+  75%% in 0.1773 secs
+  90%% in 0.2252 secs
+  95%% in 0.5923 secs
+  99%% in 0.6103 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0006 secs, 0.0000 secs, 0.1643 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0038 secs
+  resp wait:    0.2076 secs, 0.1309 secs, 0.6704 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0030 secs
+
+Status code distribution:
+  [200] 25381 responses
+
+
+
+
+=== Completed test at ~500 RPS ===
+
+
+=== Running hey test at ~1000 RPS ===
+Target: http://3.89.58.94 | Duration: 60s | RPS: 1000 | Concurrency cap: 200 | Per-worker RPS: 5 | CPUs: 6
+
+
+Summary:
+  Total:        60.4952 secs
+  Slowest:      0.8542 secs
+  Fastest:      0.1342 secs
+  Average:      0.2748 secs
+  Requests/sec: 674.5164
+
+  Total data:   20239280 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.134 [1]     |
+  0.206 [29465] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.278 [721]   |■
+  0.350 [213]   |
+  0.422 [175]   |
+  0.494 [2168]  |■■■
+  0.566 [675]   |■
+  0.638 [6318]  |■■■■■■■■■
+  0.710 [1021]  |■
+  0.782 [24]    |
+  0.854 [24]    |
+
+
+Latency distribution:
+  10%% in 0.1561 secs
+  25%% in 0.1640 secs
+  50%% in 0.1742 secs
+  75%% in 0.4480 secs
+  90%% in 0.6125 secs
+  95%% in 0.6293 secs
+  99%% in 0.6483 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0008 secs, 0.0000 secs, 0.1895 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0033 secs
+  resp wait:    0.2738 secs, 0.1341 secs, 0.8541 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0035 secs
+
+Status code distribution:
+  [200] 40805 responses
+
+
+
+
+=== Completed test at ~1000 RPS ===
+
+
+=== Running hey test at ~2000 RPS ===
+Target: http://3.89.58.94 | Duration: 60s | RPS: 2000 | Concurrency cap: 400 | Per-worker RPS: 5 | CPUs: 6
+
+
+Summary:
+  Total:        60.5506 secs
+  Slowest:      1.0796 secs
+  Fastest:      0.1342 secs
+  Average:      0.3240 secs
+  Requests/sec: 1173.5967
+
+  Total data:   35246752 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.134 [1]     |
+  0.229 [45248] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.323 [1965]  |■■
+  0.418 [369]   |
+  0.512 [1894]  |■■
+  0.607 [6463]  |■■■■■■
+  0.701 [14435] |■■■■■■■■■■■■■
+  0.796 [529]   |
+  0.890 [75]    |
+  0.985 [70]    |
+  1.080 [13]    |
+
+
+Latency distribution:
+  10%% in 0.1579 secs
+  25%% in 0.1675 secs
+  50%% in 0.1831 secs
+  75%% in 0.5836 secs
+  90%% in 0.6563 secs
+  95%% in 0.6697 secs
+  99%% in 0.7009 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0010 secs, 0.0000 secs, 0.2165 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0041 secs
+  resp wait:    0.3229 secs, 0.1342 secs, 1.0795 secs
+  resp read:    0.0000 secs, 0.0000 secs, 0.0019 secs
+
+Status code distribution:
+  [200] 71062 responses
+
+
+
+
+=== Completed test at ~2000 RPS ===
+
+
+=== Running hey test at ~3000 RPS ===
+Target: http://3.89.58.94 | Duration: 60s | RPS: 3000 | Concurrency cap: 600 | Per-worker RPS: 5 | CPUs: 6
+
+
+Summary:
+  Total:        60.6372 secs
+  Slowest:      1.1687 secs
+  Fastest:      0.1346 secs
+  Average:      0.3014 secs
+  Requests/sec: 1902.4630
+
+  Total data:   57218560 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.135 [1]     |
+  0.238 [81123] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.341 [1706]  |■
+  0.445 [685]   |
+  0.548 [7078]  |■■■
+  0.652 [17470] |■■■■■■■■■
+  0.755 [7239]  |■■■■
+  0.858 [25]    |
+  0.962 [26]    |
+  1.065 [0]     |
+  1.169 [7]     |
+
+
+Latency distribution:
+  10%% in 0.1625 secs
+  25%% in 0.1723 secs
+  50%% in 0.1883 secs
+  75%% in 0.5070 secs
+  90%% in 0.6416 secs
+  95%% in 0.6555 secs
+  99%% in 0.6809 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0009 secs, 0.0000 secs, 0.2278 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0406 secs
+  resp wait:    0.2989 secs, 0.1345 secs, 1.1083 secs
+  resp read:    0.0000 secs, 0.0000 secs, 0.0121 secs
+
+Status code distribution:
+  [200] 115360 responses
+
+
+
+
+=== Completed test at ~3000 RPS ===
+
+
+=== Running hey test at ~4000 RPS ===
+Target: http://3.89.58.94 | Duration: 60s | RPS: 4000 | Concurrency cap: 800 | Per-worker RPS: 5 | CPUs: 6
+
+
+Summary:
+  Total:        60.6817 secs
+  Slowest:      1.0588 secs
+  Fastest:      0.1358 secs
+  Average:      0.3227 secs
+  Requests/sec: 2415.8866
+
+  Total data:   72713600 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.136 [1]     |
+  0.228 [85565] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.320 [18354] |■■■■■■■■■
+  0.413 [3502]  |■■
+  0.505 [3831]  |■■
+  0.597 [7133]  |■■■
+  0.690 [14243] |■■■■■■■
+  0.782 [10639] |■■■■■
+  0.874 [2628]  |■
+  0.967 [444]   |
+  1.059 [260]   |
+
+
+Latency distribution:
+  10%% in 0.1648 secs
+  25%% in 0.1779 secs
+  50%% in 0.2083 secs
+  75%% in 0.4910 secs
+  90%% in 0.6863 secs
+  95%% in 0.7368 secs
+  99%% in 0.8240 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0008 secs, 0.0000 secs, 0.2326 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0146 secs
+  resp wait:    0.3086 secs, 0.1358 secs, 1.0588 secs
+  resp read:    0.0000 secs, 0.0000 secs, 0.0121 secs
+
+Status code distribution:
+  [200] 146600 responses
+
+
+
+
+=== Completed test at ~4000 RPS ===
+
+
+
+
+=== Running hey test at ~4200 RPS ===
+Target: http://3.89.58.94 | Duration: 60s | RPS: 4200 | Concurrency cap: 840 | Per-worker RPS: 5 | CPUs: 6
+
+
+Summary:
+  Total:        61.0066 secs
+  Slowest:      2.2224 secs
+  Fastest:      0.3075 secs
+  Average:      0.7824 secs
+  Requests/sec: 1056.5734
+
+  Total data:   31971168 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.307 [1]     |
+  0.499 [10573] |■■■■■■■■■■■■■■■■
+  0.690 [25779] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.882 [5307]  |■■■■■■■■
+  1.073 [5985]  |■■■■■■■■■
+  1.265 [10074] |■■■■■■■■■■■■■■■■
+  1.456 [6425]  |■■■■■■■■■■
+  1.648 [150]   |
+  1.839 [71]    |
+  2.031 [69]    |
+  2.222 [24]    |
+
+
+Latency distribution:
+  10%% in 0.4805 secs
+  25%% in 0.5215 secs
+  50%% in 0.6196 secs
+  75%% in 1.0941 secs
+  90%% in 1.2698 secs
+  95%% in 1.3297 secs
+  99%% in 1.4071 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0014 secs, 0.0000 secs, 0.3473 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0264 secs
+  resp wait:    0.3823 secs, 0.1348 secs, 1.5068 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0318 secs
+
+Status code distribution:
+  [200] 64458 responses
+
+
+
+
+=== Completed test at ~4200 RPS ===
+
+
+
+=== Running hey test at ~4500 RPS ===
+Target: http://3.89.58.94 | Duration: 60s | RPS: 4500 | Concurrency cap: 900 | Per-worker RPS: 5 | CPUs: 6
+
+
+Summary:
+  Total:        60.8225 secs
+  Slowest:      2.2300 secs
+  Fastest:      0.2892 secs
+  Average:      1.0016 secs
+  Requests/sec: 887.7472
+
+  Total data:   26781520 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.289 [1]     |
+  0.483 [287]   |■
+  0.677 [16320] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.871 [13668] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  1.066 [5129]  |■■■■■■■■■■■■■
+  1.260 [4069]  |■■■■■■■■■■
+  1.454 [4069]  |■■■■■■■■■■
+  1.648 [3154]  |■■■■■■■■
+  1.842 [3381]  |■■■■■■■■
+  2.036 [3847]  |■■■■■■■■■
+  2.230 [70]    |
+
+
+Latency distribution:
+  10%% in 0.6054 secs
+  25%% in 0.6557 secs
+  50%% in 0.7855 secs
+  75%% in 1.3153 secs
+  90%% in 1.7570 secs
+  95%% in 1.9041 secs
+  99%% in 1.9752 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0009 secs, 0.0000 secs, 0.2799 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0144 secs
+  resp wait:    0.2850 secs, 0.1358 secs, 0.8441 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0367 secs
+
+Status code distribution:
+  [200] 53995 responses
+
+=== Completed test at ~4500 RPS ===
+
+
+=== Running hey test at ~4800 RPS ===
+Target: http://3.89.58.94 | Duration: 60s | RPS: 4800 | Concurrency cap: 960 | Per-worker RPS: 5 | CPUs: 6
+
+
+Summary:
+  Total:        60.7783 secs
+  Slowest:      9.7581 secs
+  Fastest:      0.3293 secs
+  Average:      1.5497 secs
+  Requests/sec: 612.7848
+
+  Total data:   18473024 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.329 [1]     |
+  1.272 [19523] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  2.215 [11960] |■■■■■■■■■■■■■■■■■■■■■■■■■
+  3.158 [4800]  |■■■■■■■■■■
+  4.101 [0]     |
+  5.044 [0]     |
+  5.987 [0]     |
+  6.929 [0]     |
+  7.872 [246]   |■
+  8.815 [467]   |■
+  9.758 [247]   |■
+
+
+Latency distribution:
+  10%% in 0.7891 secs
+  25%% in 0.8340 secs
+  50%% in 1.2205 secs
+  75%% in 1.9294 secs
+  90%% in 2.3743 secs
+  95%% in 2.4762 secs
+  99%% in 8.6269 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0430 secs, 0.0000 secs, 7.2159 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0134 secs
+  resp wait:    0.3171 secs, 0.1329 secs, 1.2441 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0515 secs
+
+Status code distribution:
+  [200] 37244 responses
+
+
+
+
+=== Completed test at ~4800 RPS ===
+
+
+
+=== Running hey test at ~5000 RPS ===
+Target: http://3.89.58.94 | Duration: 60s | RPS: 5000 | Concurrency cap: 1000 | Per-worker RPS: 5 | CPUs: 6
+
+
+Summary:
+  Total:        62.9016 secs
+  Slowest:      21.3624 secs
+  Fastest:      0.2995 secs
+  Average:      16.1595 secs
+  Requests/sec: 53.4644
+
+  Total data:   961744 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.299 [1]     |
+  2.406 [67]    |■■■
+  4.512 [46]    |■■
+  6.618 [13]    |■
+  8.725 [78]    |■■■■
+  10.831 [167]  |■■■■■■■■■
+  12.937 [120]  |■■■■■■
+  15.044 [109]  |■■■■■■
+  17.150 [138]  |■■■■■■■
+  19.256 [423]  |■■■■■■■■■■■■■■■■■■■■■■
+  21.362 [777]  |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+
+
+Latency distribution:
+  10%% in 7.3552 secs
+  25%% in 12.8421 secs
+  50%% in 18.8143 secs
+  75%% in 19.9397 secs
+  90%% in 21.0671 secs
+  95%% in 21.1447 secs
+  99%% in 21.1855 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.6230 secs, 0.0000 secs, 15.2109 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0011 secs
+  resp wait:    0.3011 secs, 0.1342 secs, 0.6504 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0009 secs
+
+Status code distribution:
+  [200] 1939 responses
+
+Error distribution:
+  [1424]        Get "http://3.89.58.94": dial tcp 3.89.58.94:80: connectex: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.
+
+
+=== Completed test at ~5000 RPS ===
