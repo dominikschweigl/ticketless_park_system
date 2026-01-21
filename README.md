@@ -51,6 +51,46 @@ The system consists of four main layers:
                               └─────────────┘                  └──────────┘
 ```
 
+## How to Run
+
+### Edge stack (Docker Compose, local)
+
+- Prereqs: Docker + Docker Compose, image assets in `./data` (Cars\*.png, Empty.png).
+- Start services (NATS, camera, barriers, dashboard, edge):
+  ```bash
+  docker-compose up --build
+  ```
+- Available locally after startup:
+  - NATS monitoring UI: http://localhost:8222
+  - Dashboard (live feeds + barrier state): http://localhost:8000
+  - Edge server: internal on `parking-net` (no public port); talks to cloud via `CLOUD_URL`/`CLOUD_NATS_URL` envs.
+- Stop/cleanup:
+  ```bash
+  docker-compose down        # stop
+  docker-compose down -v     # stop and remove volumes
+  ```
+
+### Cloud stack (Terraform, AWS)
+
+- Prereqs: AWS credentials, `terraform`, built artifacts (`cloud/target/parking-system.jar`, `webapp/dist`).
+- Deploy:
+  ```bash
+  terraform init
+  terraform apply
+  ```
+- After `apply`, note outputs and wire the edge stack to them:
+  - `akka_app_public_ip` → set `CLOUD_URL=http://<ip>:8080`
+  - `nats_public_ip` → set `CLOUD_NATS_URL=nats://<ip>:4222`
+  - `webapp_public_ip` → customer UI at http://<ip>
+- Available remotely after deploy:
+  - Cloud API (Akka): http://<akka_app_public_ip>:8080 (health: `/health`, parking: `/api/parking-lots`)
+  - Cloud NATS: nats://<nats_public_ip>:4222
+  - Webapp: http://<webapp_public_ip>
+- Destroy when done:
+  ```bash
+  terraform destroy
+  ```
+
 ## Camera Stream Simulation
 
 ### Overview
