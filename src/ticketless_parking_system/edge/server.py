@@ -85,6 +85,7 @@ async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: Parki
 
     elif checkpoint_type == "exit":
         # Check with cloud if this plate has paid
+        await cloud_client.payment_pay(plate_text)
         try:
             status = await cloud_client.payment_check(plate_text)
             paid = bool(status.get("paid", False))
@@ -96,7 +97,11 @@ async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: Parki
             price = 0
 
         if not paid:
-            print(f"[LOGIC] Vehicle {plate_text} has NOT paid (due {price} cents). Denying exit.")
+            print(f"[LOGIC] Vehicle {plate_text} has NOT paid (due {price} cents). Paying ....")
+            t1 = time.perf_counter()
+            end_to_end = t1 - t0
+            print(f"[E2E] type={checkpoint_type} plate={plate_text} barrier={id_} "
+                        f"e2e={end_to_end:.3f}s")
             return
 
         active = db.get_active_session(plate_text)
