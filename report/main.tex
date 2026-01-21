@@ -433,8 +433,8 @@ degrades severely.
 \begin{axis}[
     width=\linewidth,
     height=6.5cm,
-    xlabel={Target request rate [requests/s]},
-    ylabel={p95 latency [ms]},
+    xlabel={Target request rate [req/s]},
+    ylabel={Response Latency p95 [ms]},
     ymode=log,
     xmin=50, xmax=750,
     ymin=80, ymax=100000,
@@ -480,8 +480,8 @@ enters sustained overload with high tail latency.}
 \begin{axis}[
     width=\linewidth,
     height=6.5cm,
-    xlabel={Target request rate [requests/s]},
-    ylabel={Actual total request rate [requests/s]},
+    xlabel={Target request rate [req/s]},
+    ylabel={Throughput [req/s]},
     xmin=50, xmax=750,
     ymin=0, ymax=500,
     grid=both,
@@ -506,7 +506,7 @@ coordinates {
   (600,76)
   (700,62)
 };
-\addlegendentry{Actual throughput}
+\addlegendentry{Throughput}
 
 \end{axis}
 \end{tikzpicture}
@@ -526,7 +526,7 @@ offered load.}
 \begin{axis}[
     width=\linewidth,
     height=6.5cm,
-    xlabel={Target request rate [requests/s]},
+    xlabel={Target request rate [req/s]},
     ylabel={Success rate [\%]},
     xmin=50, xmax=750,
     ymin=0, ymax=130,
@@ -571,20 +571,23 @@ frontend under concurrent access. This test was
 intentionally isolated from the rest of the system components, meaning that 
 neither the Akka cloud backend nor any edge servers were involved.
 
-The web server was evaluated using a step-wise open-loop load test with \texttt{wrk2}. 
-The test script incrementally increases a fixed target request rate (\texttt{-R}) while keeping
-the number of threads and connections constant. Each step consists of a short warmup phase
-followed by a measurement phase, during which achieved throughput is recorded.
+In the first test shown in Figure~\ref{fig:wrk2-root}, the web server was 
+subjected to a step-wise load test using \texttt{wrk2}. A fixed number of 
+threads and connections was maintained throughout the experiment, while 
+the target request rate (\texttt{-R}) was increased incrementally. The 
+test targeted 
+the root endpoint (\texttt{/}), thereby isolating the server's ability to 
+serve static frontend content under increasing per-user request rates.
 
-Two endpoints were tested independently using identical parameters:
-\begin{itemize}
-  \item the root endpoint (\texttt{/})
-  \item the largest JavaScript bundle served by the frontend
-\end{itemize}
 
-The achieved request rate is plotted against the configured target rate. 
-Deviation from the ideal linear tracking behavior indicates saturation and marks the knee
-of the system.
+Figure~\ref{fig:wrk2-root} shows the achieved request rate as a function 
+of the configured target rate, with the dashed line representing ideal 
+linear scaling. At lower request rates, the server closely tracks the 
+offered load, indicating stable operation. As the target rate increases, 
+throughput increasingly deviates from linear behavior and becomes unstable, 
+with a pronounced drop observed beyond approximately 30~requests per second. 
+This behavior indicates server saturation and the loss of efficient 
+per-user request handling above this threshold.
 
 \begin{figure}[ht]
 \centering
@@ -593,8 +596,8 @@ of the system.
   width=\linewidth,
   height=6cm,
   grid=both,
-  xlabel={Target rate [req/s]},
-  ylabel={Achieved rate [req/s]},
+  xlabel={Target request rate per user [req/s]},
+  ylabel={Achieved request rate per user [req/s]},
   ymin=0,
   legend style={at={(0.02,0.98)},anchor=north west,draw=none}
 ]
@@ -617,57 +620,157 @@ of the system.
 
 \end{axis}
 \end{tikzpicture}
-\caption{wrk2 step test results for the root endpoint (\texttt{/}).}
+\caption{
+  Step-wise \texttt{wrk2} load test of the Nginx web interface serving 
+  a compiled React frontend. The figure compares the configured per-user 
+  request rate with the achieved throughput for the root endpoint 
+  (\texttt{/}). The dashed line indicates ideal linear scaling.
+}
+
 \label{fig:wrk2-root}
 \end{figure}
 
-\begin{figure}[ht]
+To evaluate the server's performance under a common web server request 
+pattern—a growing number of concurrent users, each generating a small number 
+of requests—a second test was conducted using \texttt{hey}. This test 
+measures latency and throughput as a function of the total target request 
+rate while maintaining a constant rate of 5 requests per second per 
+concurrent user. 
+The test gradually increases the total request rate by adding more 
+concurrent users, with each step lasting 60 seconds and a 30-second 
+pause between steps to allow server recovery. The system employed 6 cores 
+and 50,000 open ports to handle concurrent connections.
+
+Figures~\ref{fig:nginx-latency} and~\ref{fig:nginx-throughput} present the 
+results. Latency percentiles (p10, p50, p95) remain low and stable up to 
+roughly 4000~requests/s, indicating efficient handling of the load. Beyond 
+this threshold, all percentiles rise sharply, signaling saturation and 
+eventual overload. Achieved throughput initially scales nearly linearly 
+with the offered load but drops abruptly past 4000~requests/s, eventually 
+collapsing near 5000~requests/s as the server becomes severely overloaded
+and the majority of requests timeout.
+
+
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}
 \begin{axis}[
-  width=\linewidth,
-  height=6cm,
-  grid=both,
-  xlabel={Target rate [req/s]},
-  ylabel={Achieved rate [req/s]},
-  ymin=0,
-  legend style={at={(0.02,0.98)},anchor=north west,draw=none}
+    width=\linewidth,
+    height=6.5cm,
+    xlabel={Total Target request rate [req/s]},
+    ylabel={Response Latency [ms]},
+    ymode=log,
+    xmin=400, xmax=5200,
+    ymin=100, ymax=30000,
+    grid=both,
+    legend style={at={(0.03,0.97)},anchor=north west},
+    tick label style={font=\small},
+    label style={font=\small},
 ]
 
-% Ideal tracking
-\addplot[dashed] coordinates {
-  (5,5) (10,10) (12,12) (14,14) (16,16)
-  (18,18) (20,20) (22,22) (24,24)
-  (26,26) (28,28) (30,30) (32,32) (34,34)
+% p10
+\addplot+[black, mark=*, thick, mark options={
+    fill=black,
+    draw=black 
+  }]
+coordinates {
+  (500,157)
+  (1000,156)
+  (2000,158)
+  (3000,163)
+  (4000,165)
+  (4200,481)
+  (4500,605)
+  (4800,789)
+  (5000,7355)
 };
-\addlegendentry{Ideal}
+\addlegendentry{p10 latency}
 
-% Measured
-\addplot[mark=*, thick] coordinates {
-  (5,4.91) (10,8.87) (12,10.14) (14,11.02) (16,12.21)
-  (18,10.33) (20,13.76) (22,14.88) (24,15.02)
-  (26,15.41) (28,15.68) (30,15.92) (32,14.80) (34,11.05)
+% p50
+\addplot+[black, mark=triangle*, thick, mark options={
+    fill=black,
+    draw=black 
+  }]
+coordinates {
+  (500,168)
+  (1000,174)
+  (2000,183)
+  (3000,188)
+  (4000,208)
+  (4200,620)
+  (4500,786)
+  (4800,1221)
+  (5000,18814)
 };
-\addlegendentry{Measured}
+\addlegendentry{p50 latency}
+
+% p95
+\addplot+[black, mark=square*, thick, mark options={
+    fill=black,
+    draw=black 
+  }]
+coordinates {
+  (500,592)
+  (1000,629)
+  (2000,670)
+  (3000,656)
+  (4000,737)
+  (4200,1330)
+  (4500,1904)
+  (4800,2476)
+  (5000,21145)
+};
+\addlegendentry{p95 latency}
 
 \end{axis}
 \end{tikzpicture}
-\caption{wrk2 step test results for the largest JavaScript bundle.}
-\label{fig:wrk2-js}
+\caption{Nginx server response latency across different percentiles (p10, p50, p95) as a function of offered load.
+Latency remains low and stable up to roughly 4000~requests/s, indicating efficient handling of concurrent requests. 
+Above this threshold, latency rises sharply for all percentiles.}
+\label{fig:nginx-latency}
 \end{figure}
 
-Figures~\ref{fig:wrk2-root} and~\ref{fig:wrk2-js} plot the achieved request rate against the
-configured target rate. The dashed line represents ideal linear behavior, where the server
-fully tracks the offered load.
 
-At lower request rates, both endpoints closely follow the ideal curve, indicating stable
-operation without saturation. As the target rate increases, the measured throughput deviates
-from linear scaling, marking the knee of the system.
 
-The root endpoint maintains linear scaling up to a higher request rate, while the JavaScript
-bundle reaches saturation earlier. This is expected due to the higher bandwidth and I/O
-requirements of serving large static assets. Beyond the knee, increasing the offered load
-does not result in higher throughput.
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=\linewidth,
+    height=6.5cm,
+    xlabel={Total target request rate [req/s]},
+    ylabel={Throughput [req/s]},
+    xmin=400, xmax=5200,
+    ymin=0, ymax=2600,
+    grid=both,
+    legend style={at={(0.03,0.97)},anchor=north west},
+    tick label style={font=\small},
+    label style={font=\small},
+]
+
+\addplot+[black, mark=*, mark options={fill=black}, thick]
+coordinates {
+  (500,422)
+  (1000,675)
+  (2000,1174)
+  (3000,1902)
+  (4000,2416)
+  (4200,1057)
+  (4500,888)
+  (4800,613)
+  (5000,53)
+};
+\addlegendentry{Throughput}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Measured nginx throughput as a function of offered load. 
+Throughput scales nearly linearly with offered load up to ~4000~requests/s. 
+Beyond this point, throughput drops sharply.}
+\label{fig:nginx-throughput}
+\end{figure}
+
+
 
 \section{Limitations}
 \label{sec:limitations}
