@@ -51,3 +51,27 @@ export async function paymentExit(licensePlate) {
   return res.text(); // "deleted"
 }
 
+export async function getNearbyParkingLots({
+  lat,
+  lng,
+  limit = 10,
+  onlyAvailable = true,
+}) {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lng: String(lng),
+    limit: String(limit),
+    onlyAvailable: String(onlyAvailable),
+  });
+
+  const res = await fetch(
+    `${API_BASE_URL}/api/parking-lots/nearby?${params.toString()}`
+  );
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(txt || "Failed to load nearby parking lots");
+  }
+
+  return res.json(); // { results: [...] }
+}

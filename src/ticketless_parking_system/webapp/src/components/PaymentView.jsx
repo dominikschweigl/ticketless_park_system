@@ -21,7 +21,6 @@ export const PaymentView = ({ showNotification }) => {
   const toBillData = (ps) => {
     const unknown = !ps.entryTimestamp || ps.entryTimestamp === 0;
 
-    // If we never saw "enter", treat as not in lot / no fees
     if (unknown) {
       return {
         status: "NONE",
@@ -36,7 +35,6 @@ export const PaymentView = ({ showNotification }) => {
     const durationMs = (ps.currentTimestamp || Date.now()) - ps.entryTimestamp;
 
     return {
-      // your UI expects UNPAID vs else
       status: ps.paid ? "PAID" : "UNPAID",
       amount,
       entryTime: new Date(ps.entryTimestamp).toLocaleString(),
@@ -75,10 +73,6 @@ export const PaymentView = ({ showNotification }) => {
   try {
     const ps = await paymentPay(plate);
     setBillData(toBillData(ps));
-
-    // optional but nice: clear session after paying (simulates leaving)
-    // await paymentExit(plate);
-
     setPaymentStatus("paid");
     if (showNotification) showNotification("success", "Payment successful! Gate will open automatically.");
   } catch (err) {
