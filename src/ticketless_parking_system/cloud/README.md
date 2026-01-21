@@ -70,128 +70,6 @@ This creates a fat JAR at `target/parking-system.jar` that includes all dependen
 java -jar target/parking-system.jar
 ```
 
-Or with custom memory settings:
-
-```bash
-java -Xmx512m -Xms256m -jar target/parking-system.jar
-```
-
-## Docker Deployment
-
-### Build Docker Image
-
-```bash
-docker build -t parking-system:latest .
-```
-
-### Run Docker Container
-
-```bash
-docker run -it --rm \
-  -p 8080:8080 \
-  -e PARKING_ENVIRONMENT=development \
-  -e PARKING_ENABLE_METRICS=false \
-  -e HTTP_PORT=8080 \
-  parking-system:latest
-```
-
-Test the HTTP API:
-
-```bash
-# Health check
-curl http://localhost:8080/health
-
-# Get all registered parking lots
-curl http://localhost:8080/api/parking-lots
-
-# Register parking lot
-curl -X POST http://localhost:8080/api/parking-lots \
-  -H "Content-Type: application/json" \
-  -d '{"parkId":"lot-test","maxCapacity":100}'
-
-# Update occupancy
-curl -X POST http://localhost:8080/api/occupancy \
-  -H "Content-Type: application/json" \
-  -d '{"parkId":"lot-test","currentOccupancy":25}'
-
-# Get status
-curl http://localhost:8080/api/parking-lots/lot-test
-
-# Deregister parking lot
-curl -X DELETE http://localhost:8080/api/parking-lots/lot-test
-```
-
-### AWS ECS Deployment
-
-#### Create ECR Repository
-
-```bash
-aws ecr create-repository --repository-name parking-system --region us-east-1
-```
-
-#### Push Image to ECR
-
-```bash
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
-
-docker tag parking-system:latest <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/parking-system:latest
-
-docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/parking-system:latest
-```
-
-#### Create ECS Task Definition
-
-```json
-{
-  "family": "parking-system",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "512",
-  "memory": "1024",
-  "containerDefinitions": [
-    {
-      "name": "parking-system",
-      "image": "<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/parking-system:latest",
-      "portMappings": [
-        {
-          "containerPort": 8080,
-          "hostPort": 8080,
-          "protocol": "tcp"
-        }
-      ],
-      "environment": [
-        {
-          "name": "PARKING_ENVIRONMENT",
-          "value": "production"
-        },
-        {
-          "name": "PARKING_ENABLE_METRICS",
-          "value": "true"
-        }
-      ],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/parking-system",
-          "awslogs-region": "us-east-1",
-          "awslogs-stream-prefix": "ecs"
-        }
-      },
-      "healthCheck": {
-        "command": [
-          "CMD-SHELL",
-          "wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1"
-        ],
-        "interval": 30,
-        "timeout": 5,
-        "retries": 3,
-        "startPeriod": 10
-      }
-    }
-  ]
-}
-```
-
 ## API Endpunkte
 
 | Method | Endpoint                              | Beschreibung                                        |
@@ -211,7 +89,9 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/parking-system:late
 
 ## Core Components
 
-### ParkingLotManagerActor
+### Actors
+
+#### ParkingLotManagerActor
 
 Supervises all `ParkingLotActor` instances and handles:
 
@@ -245,105 +125,56 @@ Manages a single parking lot. Tracks:
 - No need for periodic broadcasts (edge server controls update frequency)
 - Validates that occupancy ≤ maxCapacity
 
-### Messages
+### PaymentActor
 
-All messages implement `CarParkMessage` and are immutable/serializable:
+Manages payment processing for parking tickets:
 
-- **`RegisterParkMessage`**: Register new parking lot (from edge server)
-- **`ParkRegisteredMessage`**: Confirmation with actor reference (to edge server)
-- **`GetRegisteredParksMessage`**: Query for registered lots
-- **`RegisteredParksListMessage`**: Response with lot list
-- **`OccupancyMessage`**: Occupancy update from edge server (replaces arrival/departure messages)
-- **`GetStatusMessage`**: Status query
-- **`CarParkStatusMessage`**: Status response (occupancy, capacity, isFull flag)
+- Tracks entry/exit events with timestamps
+- Calculates parking fees based on duration
+- Stores payment records
 
-## Configuration
+### BookingActor
 
-Environment variables (override `application.conf`):
+Handles parking space reservations:
 
-- `PARKING_ENVIRONMENT`: Set to `production`, `development`, or `local`
-- `PARKING_ENABLE_METRICS`: Enable metrics collection (true/false)
-- `PARKING_HEALTH_CHECK_PORT`: Health check server port (default: 8080)
+- Manages parking lot availability
+- Publishes booking events to message queue
+- Integrates with external booking systems
 
-## Extending the System
+### RoutingActor
 
-### Adding New Messages
+Routes users to appropriate parking lots:
 
-Create a new class extending `CarParkMessage`:
+- Finds nearby parking lots based on GPS coordinates
+- Selects optimal lot based on occupancy and availability
 
-```java
-public class ReserveSpaceMessage extends CarParkMessage {
-    private final String reservationId;
+## Messages
 
-    public ReserveSpaceMessage(String reservationId) {
-        this.reservationId = reservationId;
-    }
+All messages are immutable/serializable and extend `ParkingLotMessage`:
 
-    public String getReservationId() {
-        return reservationId;
-    }
-}
-```
+### Parking Lot Registration
 
-### Adding New Behavior to CarParkActor
+- **`RegisterParkMessage`**: Register new parking lot from edge server
+- **`ParkRegisteredMessage`**: Confirmation of successful registration
+- **`DeregisterParkMessage`**: Deregister a parking lot
+- **`ParkDeregisteredMessage`**: Confirmation of successful deregistration
 
-Add handler in `createReceive()`:
+### Parking Lot Status and Occupancy
 
-```java
-@Override
-public Receive createReceive() {
-    return receiveBuilder()
-        .match(ReserveSpaceMessage.class, this::handleReserveSpace)
-        // ... other handlers
-        .build();
-}
+- **`GetParkingLotStatusMessage`**: Query status of a specific parking lot
+- **`ParkingLotStatusMessage`**: Response containing parking lot status (occupancy, capacity, fullness)
+- **`ParkingLotOccupancyMessage`**: Update occupancy from edge server sensors
+- **`GetRegisteredParksMessage`**: Query list of all registered parking lots
+- **`RegisteredParksListMessage`**: Response containing list of registered lots
 
-private void handleReserveSpace(ReserveSpaceMessage message) {
-    // Implementation
-}
-```
+### Nearby Parking Lot Discovery
 
-## Extending the System
-
-### Adding New Messages
-
-Create a new class extending `CarParkMessage`:
-
-```java
-public class ReserveSpaceMessage extends CarParkMessage {
-    private final String reservationId;
-
-    public ReserveSpaceMessage(String reservationId) {
-        this.reservationId = reservationId;
-    }
-
-    public String getReservationId() {
-        return reservationId;
-    }
-}
-```
-
-### Adding New Behavior to CarParkActor
-
-Add handler in `createReceive()`:
-
-```java
-@Override
-public Receive createReceive() {
-    return receiveBuilder()
-        .match(ReserveSpaceMessage.class, this::handleReserveSpace)
-        // ... other handlers
-        .build();
-}
-
-private void handleReserveSpace(ReserveSpaceMessage message) {
-    // Implementation
-}
-```
+- **`NearbyParkingLotsRequestMessage`**: Request parking lots near a GPS location
+- **`NearbyParkingLotsResponseMessage`**: Response with nearby parking lots sorted by distance/availability
 
 ## Logging
 
-Configured using Logback. Log levels can be adjusted in `logback.xml`:
+Configured using Logback. Log levels can be adjusted in `src/main/resources/logback.xml`:
 
 - `INFO`: Default level - informational messages
 - `DEBUG`: Detailed debug information
@@ -354,19 +185,3 @@ Logs are written to:
 
 - Console (stdout)
 - File: `${LOG_PATH}/spring.log` (rotated daily, max 1GB total)
-
-## Testing
-
-Run tests with:
-
-```bash
-mvn test
-```
-
-## License
-
-Internal project - do not distribute
-
-## Support
-
-For issues and questions, contact the development team.
