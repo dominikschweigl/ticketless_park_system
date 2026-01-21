@@ -9,6 +9,8 @@
 \usepackage{xcolor}
 \usepackage{pgfplots}
 \usepackage{placeins}
+\usepackage{float}
+
 
 \pgfplotsset{compat=1.18}
 
@@ -391,71 +393,176 @@ the behaviour of multiple independent edge servers:
 \end{itemize}
 
 This composition ensures that the observed behaviour reflects realistic
-operational load rather than a purely synthetic stress test.
+operational load.
 
 \subsubsection*{Experimental Setup}
 
 The number of simulated edge servers was fixed at ten. The offered load
 was increased step-wise by raising the occupancy update rate per edge
-server, while keeping all other parameters constant. Each load level was
+server, while keeping other parameters constant. Each load level was
 measured for 90 seconds following a warm-up phase of 10 seconds.
 
 The following metrics were recorded:
 \begin{itemize}
-  \item Achieved total request throughput (requests per second)
+  \item Achieved total request throughput (requests/second)
   \item Success rate and number of timeouts
-  \item End-to-end request latency, with a focus on the 95th percentile
+  \item End-to-end request 95th percentile latency
 \end{itemize}
 
-\begin{figure}[t]
+The results reveal three distinct operating regions, as illustrated in
+Figures~\ref{fig:p95-latency}--\ref{fig:success-rate}. At low to moderate
+load levels (up to approximately 300~requests/s), the system exhibits
+near-linear scaling: achieved throughput closely follows the target rate
+(Figure~\ref{fig:throughput}), the request success rate remains at
+100\% (Figure~\ref{fig:success-rate}), and the p95 end-to-end latency
+stays low and stable, below 200~ms (Figure~\ref{fig:p95-latency}). As the
+target load approaches 400~requests/s, the backend reaches its
+saturation point. This transition is marked by a sharp increase in tail
+latency by more than an order of magnitude, while throughput plateaus at around
+420~requests/s and the success rate begins
+to decline due to emerging timeouts. Beyond this point, further increases in
+offered load push the system into sustained overload: effective
+throughput collapses despite higher target rates, p95 latency remains extremely high due to
+queue buildup, and the success rate
+degrades severely.
+
+
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}
 \begin{axis}[
     width=\linewidth,
     height=6.5cm,
-    xlabel={Actual total request rate [requests/s]},
+    xlabel={Target request rate [requests/s]},
     ylabel={p95 latency [ms]},
     ymode=log,
-    xmin=100, xmax=500,
-    ymin=80, ymax=20000,
+    xmin=50, xmax=750,
+    ymin=80, ymax=100000,
     grid=both,
     legend style={at={(0.03,0.97)},anchor=north west},
     tick label style={font=\small},
     label style={font=\small},
 ]
 
-\addplot+[mark=*, thick]
+\addplot+[black, mark=*, mark options={fill=black}, thick]
 coordinates {
-  (133,127)
-  (233,126)
-  (331,146)
-  (418,3098)
-  (425,5400)
+  (100,127)
+  (200,126)
+  (300,146)
+  (400,3098)
+  (450,6841)
+  (480,17285)
+  (500,30264)
+  (520,37176)
+  (540,62464)
+  (560,60870)
+  (580,66575)
+  (600,52414)
+  (700,63921)
 };
 \addlegendentry{p95 latency}
 
-% Knee annotation
-\draw[dashed,gray] (axis cs:418,80) -- (axis cs:418,20000);
-\node[anchor=west,font=\small] at (axis cs:420,600)
-{Knee / saturation onset};
+\end{axis}
+\end{tikzpicture}
+\caption{Cloud backend p95 latency as a function of \emph{target} request rate.
+Latency remains low and stable up to approximately 300~requests/s.
+Beyond 400~requests/s, tail latency increases sharply, indicating
+saturation and queue buildup. At higher target rates, the system
+enters sustained overload with high tail latency.}
+\label{fig:p95-latency}
+\end{figure}
+
+\vspace{-0.8cm}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=\linewidth,
+    height=6.5cm,
+    xlabel={Target request rate [requests/s]},
+    ylabel={Actual total request rate [requests/s]},
+    xmin=50, xmax=750,
+    ymin=0, ymax=500,
+    grid=both,
+    legend style={at={(0.03,0.97)},anchor=north west},
+    tick label style={font=\small},
+    label style={font=\small},
+]
+
+\addplot+[black, mark=*, mark options={fill=black}, thick]
+coordinates {
+  (100,133)
+  (200,233)
+  (300,331)
+  (400,418)
+  (450,425)
+  (480,298)
+  (500,197)
+  (520,128)
+  (540,83)
+  (560,70)
+  (580,69)
+  (600,76)
+  (700,62)
+};
+\addlegendentry{Actual throughput}
 
 \end{axis}
 \end{tikzpicture}
-\caption{Cloud backend latency under increasing edge-generated load.
-The system shows stable and low latency up to approximately
-330~requests/s. At around 420~requests/s, tail latency increases
-sharply, indicating the onset of saturation. Further load leads to
-severe overload and queueing collapse.}
+\caption{Achieved backend throughput versus target request rate.
+Throughput scales nearly linearly with load up to approximately
+400~requests/s. Beyond this point, the system saturates and collapses,
+with achieved throughput decreasing sharply despite increasing
+offered load.}
+\label{fig:throughput}
 \end{figure}
-\FloatBarrier
-The results show three distinct operating regions. For low to moderate
-load levels, the backend scales linearly and maintains a stable tail
-latency below 200~ms. At approximately 420~requests/s, the system reaches
-its saturation point, where latency increases by more than an order of
-magnitude and timeouts begin to occur. Beyond this point, additional
-load reduces the effective throughput and leads to severe degradation in
-both latency and success rate, which is characteristic of overload in
-queue-based systems.
+
+\vspace{-0.8cm}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=\linewidth,
+    height=6.5cm,
+    xlabel={Target request rate [requests/s]},
+    ylabel={Success rate [\%]},
+    xmin=50, xmax=750,
+    ymin=0, ymax=130,
+    grid=both,
+    legend style={at={(0.03,0.97)},anchor=north west},
+    tick label style={font=\small},
+    label style={font=\small},
+]
+
+\addplot+[black, mark=*, mark options={fill=black}, thick]
+coordinates {
+  (100,100.0)
+  (200,100.0)
+  (300,100.0)
+  (400,99.12)
+  (450,79.56)
+  (480,51.30)
+  (500,50.25)
+  (520,47.42)
+  (540,45.95)
+  (560,44.29)
+  (580,41.89)
+  (600,45.40)
+  (700,42.18)
+};
+\addlegendentry{Success rate}
+
+\end{axis}
+\end{tikzpicture}
+\caption{Request success rate versus target request rate.
+The system maintains near-perfect reliability up to approximately
+400~requests/s. Beyond this point, success rate degrades sharply as
+timeouts and failed requests increase under overload conditions.}
+\label{fig:success-rate}
+\end{figure}
+
 
 \subsection{Test Case 2: Web Interface Load Test (Nginx + React)}
 The goal of this test was to evaluate the performance of the web interface, 
@@ -479,7 +586,7 @@ The achieved request rate is plotted against the configured target rate.
 Deviation from the ideal linear tracking behavior indicates saturation and marks the knee
 of the system.
 
-\begin{figure}[t]
+\begin{figure}[ht]
 \centering
 \begin{tikzpicture}
 \begin{axis}[
@@ -514,7 +621,7 @@ of the system.
 \label{fig:wrk2-root}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[ht]
 \centering
 \begin{tikzpicture}
 \begin{axis}[
