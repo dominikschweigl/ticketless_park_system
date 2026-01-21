@@ -225,6 +225,7 @@ resource "aws_instance" "webapp" {
               dnf update -y
               dnf install -y nginx
               systemctl enable nginx
+              systemctl start nginx
               rm -rf /usr/share/nginx/html/*
               EOF
 
