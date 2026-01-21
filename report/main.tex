@@ -712,7 +712,7 @@ Above this threshold, latency rises sharply for all percentiles.}
 \begin{tikzpicture}
 \begin{axis}[
     width=\linewidth,
-    height=6.5cm,
+    height=6.0cm,
     xlabel={Total target request rate [req/s]},
     ylabel={Throughput [req/s]},
     xmin=400, xmax=5200,
@@ -739,10 +739,143 @@ coordinates {
 
 \end{axis}
 \end{tikzpicture}
+
+\vspace{-0.4em}
 \caption{Measured nginx throughput as a function of offered load. 
 Throughput scales nearly linearly with offered load up to ~4000~requests/s. 
 Beyond this point, throughput drops sharply.}
+
+
 \label{fig:nginx-throughput}
+\end{figure}
+
+
+\subsection{Test Case 3: Edge Camera to Actuator Latency}
+
+This test measures the end-to-end latency from the moment a vehicle's 
+camera frame is received at the edge server to the execution of the 
+corresponding actuator command, for both vehicle entry and exit. 
+Understanding this latency is crucial to maintaining a smooth user 
+experience and efficient traffic flow.
+
+The experiment was carried out using a single edge stack, comprising camera 
+simulators, the edge server, a local NATS broker, and the actuator 
+interface. Over a 25-minute period, 414 entry and 172 exit events were 
+recorded. For each event, the time difference between frame reception and 
+actuator command execution was measured to calculate the camera-to-gate 
+latency.
+
+Figures~\ref{fig:entry-latency} and~\ref{fig:exit-latency} summarize the 
+results. Most entry events (68.4\%) exhibited latencies between 3.2 and 3.5 
+seconds, whereas exit events were generally faster, with 41.8\% completing 
+in under 2.6 seconds. This occurs despite the synchronous cloud payment 
+verification query during exits. The higher entry latency arises 
+because the edge server currently waits for both occupancy and payment 
+start requests to be sent and acknowledged by the cloud before opening the 
+gate, which is a potential area for optimization.
+
+\vspace{-0.2cm}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  bar width=18pt,
+  ymin=0,
+  ymax=85,
+  ylabel={Share of entry events (\%)},
+  xlabel={Camera-to-Gate latency [s]},
+    xlabel style={
+    yshift=1pt
+  },
+  symbolic x coords={<2.6,2.6--2.9,2.9--3.2,3.2--3.5,>3.5},
+  xtick=data,
+  xticklabel style={
+    rotate=35,
+    anchor=east,
+    font=\small
+  },
+  nodes near coords,
+  nodes near coords align={vertical},
+  every node near coord/.append style={
+    font=\scriptsize,
+    yshift=2pt
+  },
+  ymajorgrids,
+  grid style={dashed},
+  width=\linewidth,
+  height=5.0cm,
+]
+
+\addplot[fill=black]  coordinates {
+  (<2.6, 0.0)
+  (2.6--2.9, 9.4)
+  (2.9--3.2, 15.9)
+  (3.2--3.5, 68.4)
+  (>3.5, 6.3)
+};
+
+\end{axis}
+\end{tikzpicture}
+
+\vspace{-0.2em}
+\caption{Distribution of camera-to-gate latency for vehicle entry events. 
+The majority of entry events (68.4\%) exhibit latencies between 3.2 and 
+3.5 seconds.}
+\label{fig:entry-latency}
+\end{figure}
+
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+  ybar,
+  bar width=18pt,
+  ymin=0,
+  ymax=55,
+  ylabel={Share of exit events (\%)},
+  xlabel={Camera-to-Gate latency [s]},
+    xlabel style={
+    yshift=0pt
+  },
+  symbolic x coords={<2.6,2.6--2.9,2.9--3.2,3.2--3.5,>3.5},
+  xtick=data,
+  xticklabel style={
+    rotate=35,
+    anchor=east,
+    font=\small
+  },
+  nodes near coords,
+  nodes near coords align={vertical},
+  every node near coord/.append style={
+    font=\scriptsize,
+    yshift=2pt
+  },
+  ymajorgrids,
+  grid style={dashed},
+  width=\linewidth,
+  height=5.0cm,
+]
+
+\addplot[fill=black]  coordinates {
+  (<2.6, 41.8)
+  (2.6--2.9, 7.6)
+  (2.9--3.2, 24.4)
+  (3.2--3.5, 15.1)
+  (>3.5, 2.9)
+};
+
+\end{axis}
+\end{tikzpicture}
+
+\vspace{-0.2em}
+\caption{Distribution of camera-to-gate latency for vehicle exit events. 
+A significant portion of exit events (41.8\%) complete in under 2.6 seconds,
+indicating that cloud queries introduce modest delays.}
+
+\label{fig:exit-latency}
 \end{figure}
 
 
