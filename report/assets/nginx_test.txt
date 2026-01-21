@@ -1,0 +1,428 @@
+=== Running hey test with 100 concurrent connections ===
+Target: http://54.234.138.208 | Duration: 60s | CPUs: 6 | Timeout: 30 seconds
+
+
+Summary:
+  Total:        60.5814 secs
+  Slowest:      0.6966 secs
+  Fastest:      0.1363 secs
+  Average:      0.3474 secs
+  Requests/sec: 286.1604
+
+  Total data:   8598656 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.136 [1]     |
+  0.192 [10141] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.248 [18]    |
+  0.304 [0]     |
+  0.360 [100]   |
+  0.416 [0]     |
+  0.472 [0]     |
+  0.528 [0]     |
+  0.585 [12]    |
+  0.641 [6747]  |■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.697 [317]   |■
+
+
+Latency distribution:
+  10%% in 0.1518 secs
+  25%% in 0.1583 secs
+  50%% in 0.1690 secs
+  75%% in 0.6118 secs
+  90%% in 0.6257 secs
+  95%% in 0.6322 secs
+  99%% in 0.6448 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0010 secs, 0.0000 secs, 0.1785 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0010 secs
+  resp wait:    0.3462 secs, 0.1361 secs, 0.6964 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0021 secs
+
+Status code distribution:
+  [200] 17336 responses
+
+
+
+
+=== Completed test with 100 concurrent connections ===
+
+
+=== Running hey test with 200 concurrent connections ===
+Target: http://54.234.138.208 | Duration: 60s | CPUs: 6 | Timeout: 30 seconds
+
+
+Summary:
+  Total:        60.6271 secs
+  Slowest:      1.0930 secs
+  Fastest:      0.1368 secs
+  Average:      0.4076 secs
+  Requests/sec: 487.5044
+
+  Total data:   14659776 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.137 [1]     |
+  0.232 [13766] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.328 [14]    |
+  0.424 [195]   |■
+  0.519 [0]     |
+  0.615 [4662]  |■■■■■■■■■■■■■■
+  0.711 [10914] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.806 [3]     |
+  0.902 [0]     |
+  0.997 [0]     |
+  1.093 [1]     |
+
+
+Latency distribution:
+  10%% in 0.1553 secs
+  25%% in 0.1631 secs
+  50%% in 0.5868 secs
+  75%% in 0.6275 secs
+  90%% in 0.6423 secs
+  95%% in 0.6496 secs
+  99%% in 0.6637 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0012 secs, 0.0000 secs, 0.1892 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0034 secs
+  resp wait:    0.4063 secs, 0.1365 secs, 1.0930 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0023 secs
+
+Status code distribution:
+  [200] 29556 responses
+
+
+
+
+=== Completed test with 200 concurrent connections ===
+
+
+=== Running hey test with 300 concurrent connections ===
+Target: http://54.234.138.208 | Duration: 60s | CPUs: 6 | Timeout: 30 seconds
+
+
+Summary:
+  Total:        60.6693 secs
+  Slowest:      1.0840 secs
+  Fastest:      0.1366 secs
+  Average:      0.4630 secs
+  Requests/sec: 643.7527
+
+  Total data:   19371776 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.137 [1]     |
+  0.231 [15401] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.326 [104]   |
+  0.421 [203]   |
+  0.516 [0]     |
+  0.610 [3721]  |■■■■■■■■
+  0.705 [18144] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.800 [1390]  |■■■
+  0.895 [0]     |
+  0.989 [1]     |
+  1.084 [91]    |
+
+
+Latency distribution:
+  10%% in 0.1578 secs
+  25%% in 0.1678 secs
+  50%% in 0.6107 secs
+  75%% in 0.6807 secs
+  90%% in 0.6952 secs
+  95%% in 0.7021 secs
+  99%% in 0.7179 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0011 secs, 0.0000 secs, 0.2280 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0036 secs
+  resp wait:    0.4603 secs, 0.1366 secs, 0.7608 secs
+  resp read:    0.0000 secs, 0.0000 secs, 0.0013 secs
+
+Status code distribution:
+  [200] 39056 responses
+
+
+
+
+=== Completed test with 300 concurrent connections ===
+
+
+=== Running hey test with 400 concurrent connections ===
+Target: http://54.234.138.208 | Duration: 60s | CPUs: 6 | Timeout: 30 seconds
+
+
+Summary:
+  Total:        60.6576 secs
+  Slowest:      1.2491 secs
+  Fastest:      0.1357 secs
+  Average:      0.4898 secs
+  Requests/sec: 811.8026
+
+  Total data:   24423536 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.136 [1]     |
+  0.247 [14210] |■■■■■■■■■■■■■■■■■■■■■■■■
+  0.358 [905]   |■■
+  0.470 [2128]  |■■■■
+  0.581 [4330]  |■■■■■■■
+  0.692 [23423] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.804 [3943]  |■■■■■■■
+  0.915 [262]   |
+  1.026 [32]    |
+  1.138 [3]     |
+  1.249 [4]     |
+
+
+Latency distribution:
+  10%% in 0.1652 secs
+  25%% in 0.2041 secs
+  50%% in 0.6181 secs
+  75%% in 0.6575 secs
+  90%% in 0.6874 secs
+  95%% in 0.7109 secs
+  99%% in 0.7878 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0013 secs, 0.0000 secs, 0.2009 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0033 secs
+  resp wait:    0.4809 secs, 0.1357 secs, 1.2479 secs
+  resp read:    0.0000 secs, 0.0000 secs, 0.0038 secs
+
+Status code distribution:
+  [200] 49241 responses
+
+Error distribution:
+  [1]   Get "http://54.234.138.208": dial tcp 54.234.138.208:80: bind: An operation on a socket could not be performed because the system lacked sufficient buffer space or because a queue was full.
+
+
+=== Completed test with 400 concurrent connections ===
+
+
+=== Running hey test with 500 concurrent connections ===
+Target: http://54.234.138.208 | Duration: 60s | CPUs: 6 | Timeout: 30 seconds
+
+
+Summary:
+  Total:        61.8983 secs
+  Slowest:      21.7265 secs
+  Fastest:      0.2918 secs
+  Average:      2.6898 secs
+  Requests/sec: 168.4699
+
+  Total data:   5109792 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.292 [1]     |
+  2.435 [7759]  |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  4.579 [2077]  |■■■■■■■■■■■
+  6.722 [27]    |
+  8.866 [40]    |
+  11.009 [23]   |
+  13.153 [33]   |
+  15.296 [32]   |
+  17.440 [37]   |
+  19.583 [30]   |
+  21.727 [243]  |■
+
+
+Latency distribution:
+  10%% in 1.4442 secs
+  25%% in 1.6651 secs
+  50%% in 2.0134 secs
+  75%% in 2.4304 secs
+  90%% in 2.7856 secs
+  95%% in 2.9767 secs
+  99%% in 21.0208 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0224 secs, 0.0000 secs, 15.2111 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0017 secs
+  resp wait:    0.3978 secs, 0.1376 secs, 1.0563 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0028 secs
+
+Status code distribution:
+  [200] 10302 responses
+
+Error distribution:
+  [126] Get "http://54.234.138.208": dial tcp 54.234.138.208:80: connectex: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.
+
+
+=== Completed test with 500 concurrent connections ===
+
+
+=== Running hey test with 600 concurrent connections ===
+Target: http://54.234.138.208 | Duration: 60s | CPUs: 6 | Timeout: 30 seconds
+
+
+Summary:
+  Total:        61.8435 secs
+  Slowest:      2.5790 secs
+  Fastest:      0.2881 secs
+  Average:      1.7226 secs
+  Requests/sec: 234.3171
+
+  Total data:   6889936 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.288 [1]     |
+  0.517 [198]   |■
+  0.746 [0]     |
+  0.975 [160]   |■
+  1.204 [462]   |■■
+  1.434 [1064]  |■■■■■■
+  1.663 [1709]  |■■■■■■■■■
+  1.892 [7495]  |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  2.121 [2575]  |■■■■■■■■■■■■■■
+  2.350 [207]   |■
+  2.579 [20]    |
+
+
+Latency distribution:
+  10%% in 1.3316 secs
+  25%% in 1.6532 secs
+  50%% in 1.8214 secs
+  75%% in 1.8805 secs
+  90%% in 1.9335 secs
+  95%% in 1.9739 secs
+  99%% in 2.1648 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0024 secs, 0.0000 secs, 0.1826 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0025 secs
+  resp wait:    0.5762 secs, 0.1367 secs, 1.2022 secs
+  resp read:    0.0001 secs, 0.0000 secs, 0.0028 secs
+
+Status code distribution:
+  [200] 13891 responses
+
+Error distribution:
+  [600] Get "http://54.234.138.208": dial tcp 54.234.138.208:80: connectex: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.
+
+
+=== Completed test with 600 concurrent connections ===
+
+
+=== Running hey test with 700 concurrent connections ===
+Target: http://54.234.138.208 | Duration: 60s | CPUs: 6 | Timeout: 30 seconds
+
+
+Summary:
+  Total:        61.1415 secs
+  Slowest:      2.3464 secs
+  Fastest:      0.3132 secs
+  Average:      1.0864 secs
+  Requests/sec: 426.9114
+
+  Total data:   12599392 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.313 [1]     |
+  0.516 [312]   |■
+  0.720 [3100]  |■■■■■■■■■■
+  0.923 [5050]  |■■■■■■■■■■■■■■■■■
+  1.126 [1432]  |■■■■■
+  1.330 [11929] |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  1.533 [3112]  |■■■■■■■■■■
+  1.736 [289]   |■
+  1.940 [130]   |
+  2.143 [13]    |
+  2.346 [34]    |
+
+
+Latency distribution:
+  10%% in 0.7048 secs
+  25%% in 0.8035 secs
+  50%% in 1.1882 secs
+  75%% in 1.2872 secs
+  90%% in 1.3526 secs
+  95%% in 1.4056 secs
+  99%% in 1.6471 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0021 secs, 0.0000 secs, 0.1972 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0000 secs, 0.0000 secs, 0.0025 secs
+  resp wait:    0.4771 secs, 0.1365 secs, 1.2521 secs
+  resp read:    0.0000 secs, 0.0000 secs, 0.0048 secs
+
+Status code distribution:
+  [200] 25402 responses
+
+Error distribution:
+  [700] Get "http://54.234.138.208": dial tcp 54.234.138.208:80: connectex: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.
+
+
+=== Completed test with 700 concurrent connections ===
+
+
+=== Running hey test with 800 concurrent connections ===
+Target: http://54.234.138.208 | Duration: 60s | CPUs: 6 | Timeout: 30 seconds
+
+
+Summary:
+  Total:        60.8102 secs
+  Slowest:      2.3444 secs
+  Fastest:      0.1982 secs
+  Average:      0.8491 secs
+  Requests/sec: 11154.5577
+
+  Total data:   16883344 bytes
+  Size/request: 496 bytes
+
+Response time histogram:
+  0.198 [1]     |
+  0.413 [3852]  |■■■■■■■■■■■■■■■■■■
+  0.627 [7226]  |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  0.842 [5933]  |■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  1.057 [6046]  |■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  1.271 [8796]  |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+  1.486 [1509]  |■■■■■■■
+  1.701 [493]   |■■
+  1.915 [134]   |■
+  2.130 [17]    |
+  2.344 [32]    |
+
+
+Latency distribution:
+  10%% in 0.3807 secs
+  25%% in 0.5782 secs
+  50%% in 0.8423 secs
+  75%% in 1.1097 secs
+  90%% in 1.2370 secs
+  95%% in 1.3074 secs
+  99%% in 1.5931 secs
+
+Details (average, fastest, slowest):
+  DNS+dialup:   0.0019 secs, 0.0000 secs, 0.2115 secs
+  DNS-lookup:   0.0000 secs, 0.0000 secs, 0.0000 secs
+  req write:    0.0002 secs, 0.0000 secs, 0.5304 secs
+  resp wait:    0.4365 secs, 0.1360 secs, 1.4526 secs
+  resp read:    0.0088 secs, 0.0000 secs, 0.7517 secs
+
+Status code distribution:
+  [200] 34039 responses
+
+Error distribution:
+  [643472]      Get "http://54.234.138.208": dial tcp 54.234.138.208:80: bind: An operation on a socket could not be performed because the system lacked sufficient buffer space or because a queue was full.
+  [800] Get "http://54.234.138.208": dial tcp 54.234.138.208:80: connectex: A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.
+
+
+=== Completed test with 800 concurrent connections ===
