@@ -70,7 +70,7 @@ services:
     restart: always
     environment:
       - EDGE_NATS_URL=nats://nats:4222
-      - CLOUD_URL=http://3.237.5.215:8080
+      - CLOUD_URL=http://98.83.43.132:8080
       - CLOUD_NATS_URL=nats://44.221.89.68:4222
       - DB_PATH=/app/data/parking.db
     depends_on:
@@ -80,7 +80,6 @@ services:
     volumes:
       # persistent storage for SQLite DB file
       - edge-db-data:/app/data
-      - ./src/ticketless_parking_system/edge:/app
 
   # cloud:
   #     build:

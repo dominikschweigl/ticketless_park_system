@@ -102,6 +102,11 @@ async def checkpoint_handler(plate_text: str, id_: str, nc_edge: NATS, db: Parki
             end_to_end = t1 - t0
             print(f"[E2E] type={checkpoint_type} plate={plate_text} barrier={id_} "
                         f"e2e={end_to_end:.3f}s")
+            resp, barrier_dt = await open_barrier(nc_edge, id_)
+            t1 = time.perf_counter()
+            end_to_end = t1 - t0
+            print(f"[E2E] type={checkpoint_type} plate={plate_text} barrier={id_} resp={resp} "
+                        f"e2e={end_to_end:.3f}s barrier={barrier_dt:.3f}s") 
             return
 
         active = db.get_active_session(plate_text)
