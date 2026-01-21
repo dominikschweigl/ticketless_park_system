@@ -4,6 +4,53 @@
 
 A distributed parking system that uses license plate detection to enable ticketless parking. Vehicles are detected at entry and exit points, and customers can pay using their license plate number through a web application or payment station.
 
+## System Architecture
+
+The system consists of four main layers:
+
+### 1. IoT Layer (Edge Devices)
+
+- **Camera Simulators**: Generate camera feeds at entry/exit points
+- **Barrier Controllers**: Manage physical barriers at entry/exit gates
+- **Dashboard**: Real-time monitoring web interface with WebSocket support
+
+### 2. Edge Layer
+
+- **Edge Server**: License plate detection and local processing
+- **Local Database**: SQLite database for parking session tracking
+- **ML Models**: YOLOv11 for license plate detection + EasyOCR for text recognition
+- **Cloud Synchronization**: Bidirectional communication with cloud backend
+
+### 3. Cloud Layer (Akka-based)
+
+- **Parking Lot Manager**: Supervises all parking lots, handles registration
+- **Payment Actor**: Tracks parking sessions, calculates pricing, manages payments
+- **Booking Actor**: Handles advance parking reservations
+- **Routing Actor**: Geographic queries for nearby parking lots
+- **NATS Integration**: Message queue for edge-cloud communication
+
+### 4. Frontend Layer
+
+- **Web Application**: React-based UI for payments and reservations
+- **Real-time Updates**: Live parking capacity information
+- **Geolocation**: Find nearby parking lots based on user location
+
+## Communication Flow
+
+```
+┌─────────────┐     NATS      ┌──────────────┐    HTTP/NATS   ┌─────────────┐
+│   Camera    │──────────────▶│ Edge Server  │───────────────▶│   Cloud     │
+│  Simulator  │               │ (Detection)  │                │   (Akka)    │
+└─────────────┘               └──────┬───────┘                └──────┬──────┘
+                                     │                                │
+                                     │ NATS                           │ HTTP
+                                     ▼                                ▼
+                              ┌─────────────┐                  ┌──────────┐
+                              │  Barrier    │                  │  Webapp  │
+                              │ Controller  │                  │ (React)  │
+                              └─────────────┘                  └──────────┘
+```
+
 ## Camera Stream Simulation
 
 ### Overview
@@ -64,11 +111,299 @@ export NATS_URL=nats://localhost:4222
 python src/ticketless_parking_system/IoT/camera/camera.py
 ```
 
+## Barrier Controller
+
+### Overview
+
+The barrier controller simulates physical parking barriers at entry and exit points. It provides both a visual GUI representation and responds to NATS messages to open barriers when vehicles are authorized to enter or exit.
+
+### How It Works
+
+#### Barrier States
+
+- **Closed (Red)**: Default state, blocking vehicle passage
+- **Open (Green)**: Allows vehicle passage, triggered by edge server
+
+#### Communication Protocol
+
+- Subscribes to `{BARRIER_ID}.trigger` NATS subject
+- Receives barrier open requests from edge server
+- Sends acknowledgment response back
+- Uses request-reply pattern for reliable communication
+
+#### Sensor Simulation
+
+The barrier includes two virtual sensors:
+
+- **detect_vehicle**: Light sensor positioned before the barrier
+- **vehicle_passed**: Sensor behind the barrier to confirm passage
+
+These sensors enable automatic barrier closing after vehicle passage.
+
+### Configuration
+
+Key parameters in `barrier.py`:
+
+- `NATS_URL`: Connection URL for the NATS message queue (default: from environment variable)
+- `BARRIER_ID`: Unique identifier for the barrier (e.g., "entry_0", "exit_0")
+- Barrier automatically closes after vehicle passes through
+
+### Usage
+
+```bash
+# Set up environment
+export NATS_URL=nats://localhost:4222
+export BARRIER_ID=entry_0
+
+# Run the barrier controller
+python src/ticketless_parking_system/IoT/barrier/barrier.py
+```
+
+## Dashboard (Real-Time Monitoring)
+
+### Overview
+
+A FastAPI-based web dashboard that provides real-time monitoring of the parking system. It displays live camera feeds and barrier states through WebSocket connections.
+
+### How It Works
+
+#### WebSocket Server
+
+- Serves on port 8000
+- Broadcasts real-time updates to all connected clients
+- Maintains last known state for new connections
+
+#### NATS Subscriptions
+
+The dashboard subscribes to multiple NATS subjects:
+
+- `barrier.*.state`: Barrier state changes (open/closed)
+- `camera.entry`: Entry camera feed (base64 encoded images)
+- `camera.exit`: Exit camera feed (base64 encoded images)
+
+### Configuration
+
+Key parameters in `dashboard.py`:
+
+- `NATS_URL`: Connection URL for the NATS message queue (default: from environment variable)
+- Port: 8000 (hardcoded in FastAPI startup)
+
+### Usage
+
+```bash
+# Set up environment
+export NATS_URL=nats://localhost:4222
+
+# Run the dashboard
+python src/ticketless_parking_system/IoT/dashboard/dashboard.py
+```
+
+### Access
+
+- Open browser to `http://localhost:8000`
+- Real-time updates via WebSocket at `ws://localhost:8000/ws`
+- Static assets served from `static/` directory
+
+## Edge Server
+
+### Overview
+
+The edge server is the core processing component that handles license plate detection, parking session management, and coordination between IoT devices and the cloud backend.
+
+### How It Works
+
+#### License Plate Detection Pipeline
+
+1. **Frame Reception**: Receives camera frames via NATS from entry/exit cameras
+2. **Vehicle Detection**: Uses YOLOv11 model to detect license plates in frames
+3. **OCR Processing**: Extracts text from detected plates using EasyOCR
+4. **Validation**: Filters results based on confidence thresholds
+
+#### Parking Session Management
+
+**Entry Flow**:
+
+- Detects license plate at entry camera
+- Checks if vehicle already inside (via local SQLite database)
+- Registers entry with cloud backend
+- Opens entry barrier via NATS request-reply
+- Records session in local database
+
+**Exit Flow**:
+
+- Detects license plate at exit camera
+- Verifies payment status with cloud backend
+- If paid: Opens exit barrier and marks session complete
+- If unpaid: Barrier remains closed
+- Cleans up session data after successful exit
+
+#### Local Database (SQLite)
+
+Tracks parking sessions with fields:
+
+- License plate
+- Car park ID
+- Entry/exit timestamps
+- Session status (active, completed)
+- Created/updated timestamps
+
+This provides resilience against temporary edge server
+failuers.
+
+#### Cloud Synchronization
+
+**HTTP Communication**:
+
+- Registers parking lot on startup
+- Sends periodic occupancy updates
+- Checks payment status
+- Notifies entry/exit events
+
+**NATS Communication**:
+
+- Receives booking notifications from cloud
+- Sends barrier control messages to IoT devices
+- Publishes occupancy updates to dashboard
+
+### Configuration
+
+Environment variables in `server.py`:
+
+- `EDGE_NATS_URL`: Local NATS server (for IoT devices)
+- `CLOUD_NATS_URL`: Cloud NATS server (for cloud backend communication)
+- `CLOUD_URL`: Cloud backend HTTP endpoint
+- `DETECTION_MODEL_PATH`: Path to YOLOv11 model file
+- `DB_PATH`: SQLite database path
+- `CAR_PARK_ID`: Unique parking lot identifier
+- `CAR_PARK_CAPACITY`: Maximum parking capacity
+- `CAR_PARK_LAT` / `CAR_PARK_LNG`: Geographic coordinates
+
+### Usage
+
+```bash
+# Set up environment
+export EDGE_NATS_URL=nats://localhost:4222
+export CLOUD_URL=http://localhost:8080
+export CLOUD_NATS_URL=nats://localhost:4222
+export DETECTION_MODEL_PATH=./yolov11s-license-plate.pt
+export DB_PATH=./parking.db
+export CAR_PARK_ID=lot-01
+export CAR_PARK_CAPACITY=67
+
+# Run the edge server
+python src/ticketless_parking_system/edge/server.py
+```
+
+### Components
+
+#### ParkingDatabase (`edge_db.py`)
+
+- SQLite wrapper for session tracking
+- CRUD operations for parking sessions
+- Thread-safe for async operations
+
+#### CloudParkingClient (`cloud_parking_client.py`)
+
+- HTTP client for cloud backend API
+- Handles registration, occupancy, payment operations
+
+#### ParkingLotTracker (`parkinglot_tracker.py`)
+
+- Maintains local occupancy state
+- Sends periodic updates to cloud
+- Handles booking notifications
+- Manages registration/deregistration
+- Uses CloudParkingClient
+
+### ML Models
+
+- **YOLOv11**: Real-time license plate detection
+- **EasyOCR**: Optical character recognition for plate text
+- Models run locally on edge server for low latency
+
+## Cloud Backend (Akka)
+
+### Overview
+
+The cloud backend is built with Akka (Java) and provides a centralized actor-based system for managing multiple parking lots, handling payments, and coordinating bookings across the entire parking network.
+For detailed Actor implementation see the respective
+Akka Cloud Backend README at `src/ticketless_parking_system/cloud`.
+
+### NATS Integration
+
+The cloud backend integrates with NATS for:
+
+- Publishing booking events to edge servers
+- Receiving status updates (if configured)
+- Enabling pub/sub patterns across distributed edge nodes
+
+### Configuration
+
+Environment variables:
+
+- `NATS_URL`: NATS server connection string
+- `HTTP_HOST`: HTTP server bind address (default: 0.0.0.0)
+- `HTTP_PORT`: HTTP server port (default: 8080)
+- `PARKING_ENVIRONMENT`: Environment name (development/production)
+- `PARKING_ENABLE_METRICS`: Enable metrics collection
+
+### Building & Running
+
+See "AWS Deployment with Terraform" section for build instructions.
+
+For local development:
+
+```bash
+cd src/ticketless_parking_system/cloud
+mvn clean package
+java -jar target/parking-system.jar
+```
+
+## Web Application
+
+### Overview
+
+A modern React-based web application that provides the customer-facing interface for the ticketless parking system. Built with Vite, Tailwind CSS, and Lucide icons.
+For details see webapp README at `src/ticketless_parking_system/webapp`
+
+### Configuration
+
+The webapp uses environment-based configuration:
+
+- API base URL configured via `window.APP_CONFIG.API_BASE_URL`
+- Configured during Terraform deployment via `config.js` injection
+
+### Building
+
+```bash
+cd src/ticketless_parking_system/webapp
+
+# Install dependencies
+npm install
+
+# Development server
+npm run dev
+
+# Production build
+npm run build
+```
+
+### Deployment
+
+The webapp is deployed to AWS EC2 via Terraform:
+
+1. Vite builds static files to `dist/` directory
+2. Terraform provisions EC2 instance with nginx
+3. Static files uploaded and served
+4. API base URL injected via `config.js`
+
+Access after deployment: `http://<webapp_public_ip>`
+
 ## Docker Setup
 
 ### Overview
 
-This project uses Docker and Docker Compose to orchestrate multiple services: the NATS message broker, the camera simulator, and the edge server. This containerized approach ensures consistency across environments and simplifies deployment.
+This project uses Docker and Docker Compose to orchestrate multiple services: the NATS message broker, the camera simulator, barrier controllers, dashboard, and the edge server. This containerized approach ensures consistency across environments and simplifies deployment.
 
 ### Services
 
@@ -87,24 +422,71 @@ This project uses Docker and Docker Compose to orchestrate multiple services: th
 - **Dockerfile**: Located at `src/ticketless_parking_system/IoT/camera/dockerfile`
 - **Environment**:
   - `NATS_URL=nats://nats:4222`
+  - `CAMERA_ID=0`
 - **Dependencies**: Requires NATS service to be running
 - **Data Volume**: Mounts `./data` directory for car and empty street images
 - **Network**: parking-net (bridge network)
+
+#### Barrier Controllers
+
+**Entry Barrier**:
+
+- **Role**: Controls entry gate barrier
+- **Dockerfile**: Located at `src/ticketless_parking_system/IoT/barrier/dockerfile`
+- **Environment**:
+  - `NATS_URL=nats://nats:4222`
+  - `BARRIER_ID=entry_0`
+- **Dependencies**: Requires NATS service
+- **Network**: parking-net (bridge network)
+
+**Exit Barrier**:
+
+- **Role**: Controls exit gate barrier
+- **Environment**:
+  - `NATS_URL=nats://nats:4222`
+  - `BARRIER_ID=exit_0`
+- **Configuration**: Same as entry barrier but with different ID
+
+#### Dashboard
+
+- **Role**: Real-time monitoring web interface
+- **Dockerfile**: Located at `src/ticketless_parking_system/IoT/dashboard/dockerfile`
+- **Environment**:
+  - `NATS_URL=nats://nats:4222`
+- **Ports**: `8000:8000` (WebSocket and HTTP server)
+- **Dependencies**: Requires NATS service
+- **Network**: parking-net (bridge network)
+- **Access**: `http://localhost:8000`
 
 #### Edge Server
 
 - **Role**: Processes video streams and detects license plates
 - **Dockerfile**: Located at `src/ticketless_parking_system/edge/dockerfile`
 - **Environment**:
-  - `NATS_URL=nats://nats:4222`
+  - `EDGE_NATS_URL=nats://nats:4222` (local IoT communication)
+  - `CLOUD_URL=http://<akka-cloud-ip>:8080` (cloud backend)
+  - `CLOUD_NATS_URL=nats://<cloud-nats-ip>:4222` (cloud messaging)
+  - `DB_PATH=/app/data/parking.db` (persistent session storage)
 - **Dependencies**: Requires NATS service to be running
+- **Volumes**: `edge-db-data:/app/data` for SQLite database persistence
 - **Network**: parking-net (bridge network)
 
-Can also be run locally with the following command and assuming that the nast and camera containers are running.
+### Network Architecture
 
-```
-NATS_URL=nats://localhost:4222 DETECTION_MODEL_PATH="./src/ticketless_parking_system/edge/yolov11s-license-plate.pt" uv run src/ticketless_parking_system/edge/server.py
-```
+All services are connected via the `parking-net` bridge network, enabling:
+
+- Service discovery by container name
+- Isolated network namespace
+- Secure inter-service communication
+
+### Data Persistence
+
+**Volumes**:
+
+- `edge-db-data`: Persistent storage for edge server SQLite database
+- `./data`: Host-mounted directory for camera simulation images
+
+This ensures parking session data survives container restarts.
 
 ### Getting Started with Docker
 
@@ -219,8 +601,8 @@ Apply complete! Resources: 4 added, 0 changed, 0 destroyed.
 Outputs:
 
 ```
-akka_app_public_ip = "13.221.85.90"  
-nats_public_ip     = "54.226.212.72"  
+akka_app_public_ip = "13.221.85.90"
+nats_public_ip     = "54.226.212.72"
 webapp_public_ip   = "54.152.140.32"
 ```
 
@@ -250,7 +632,7 @@ Replace the placeholders as follows:
 
 Example:
 
-- CLOUD_URL=http://13.221.85.90:8080  
+- CLOUD_URL=http://13.221.85.90:8080
 - CLOUD_NATS_URL=nats://54.226.212.72:4222
 
 ### Notes

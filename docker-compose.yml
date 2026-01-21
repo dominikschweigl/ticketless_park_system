@@ -8,7 +8,7 @@ services:
       - "8222:8222" # monitoring UI
     environment:
       - JS_DISABLE=true
-    command: ["-js"]   # enable JetStream if you want it
+    command: ["-js"] # enable JetStream if you want it
     networks:
       - parking-net
 
@@ -25,11 +25,11 @@ services:
     networks:
       - parking-net
     volumes:
-      - ./data:/app/data  # mount your image dataset
+      - ./data:/app/data # mount your image dataset
 
   barrier-entry:
     build:
-      context: ./src/ticketless_parking_system/IoT/barrier   
+      context: ./src/ticketless_parking_system/IoT/barrier
     environment:
       - NATS_URL=nats://nats:4222
       - BARRIER_ID=entry_0
@@ -62,7 +62,7 @@ services:
       - nats
     networks:
       - parking-net
-      
+
   edge-server:
     build:
       context: ./src/ticketless_parking_system/edge
@@ -80,23 +80,6 @@ services:
     volumes:
       # persistent storage for SQLite DB file
       - edge-db-data:/app/data
-
-  # cloud:
-  #     build:
-  #       context: ./src/ticketless_parking_system/cloud   # <-- adjust to your Dockerfile folder
-  #     container_name: parking-system-cloud
-  #     restart: always
-  #     ports:
-  #       - "8080:8080"
-  #     environment:
-  #       - PARKING_ENVIRONMENT=development
-  #       - PARKING_ENABLE_METRICS=false
-  #       - HTTP_PORT=8080
-  #       - NATS_URL=nats://nats:4222
-  #     depends_on:
-  #       - nats
-  #     networks:
-  #       - parking-net
 
 networks:
   parking-net:
