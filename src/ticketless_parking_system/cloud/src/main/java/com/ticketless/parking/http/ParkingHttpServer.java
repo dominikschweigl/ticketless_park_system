@@ -18,6 +18,7 @@ import com.google.gson.Gson;
 import com.ticketless.parking.actors.ParkingLotManagerActor;
 import com.ticketless.parking.actors.PaymentActor;
 import com.ticketless.parking.actors.BookingActor;
+import com.ticketless.parking.actors.RoutingActor;
 import com.ticketless.parking.messages.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,18 +52,21 @@ public class ParkingHttpServer {
     private final ActorRef<ParkingLotManagerActor.Command> parkingLotManager;
     private final ActorRef<PaymentActor.Command> paymentActor;
     private final ActorRef<BookingActor.Command> bookingActor;
+    private final ActorRef<RoutingActor.Command> routingActor;
     private final Gson gson;
     private CompletionStage<ServerBinding> binding;
 
     public ParkingHttpServer(ActorSystem<?> actorSystem,
                              ActorRef<ParkingLotManagerActor.Command> parkingLotManager,
                              ActorRef<PaymentActor.Command> paymentActor,
-                             ActorRef<BookingActor.Command> bookingActor) {
+                             ActorRef<BookingActor.Command> bookingActor,
+                             ActorRef<RoutingActor.Command> routingActor) {
         this.actorSystem = actorSystem;
         this.scheduler = actorSystem.scheduler();
         this.parkingLotManager = parkingLotManager;
         this.paymentActor = paymentActor;
         this.bookingActor = bookingActor;
+        this.routingActor = routingActor;
         this.gson = new Gson();
     }
 
@@ -247,64 +251,19 @@ public class ParkingHttpServer {
             return complete(StatusCodes.BAD_REQUEST, "lat/lng must be valid numbers");
         }
 
-        CompletionStage<RegisteredParksListMessage> regFut = AskPattern.ask(
-                parkingLotManager,
-                (ActorRef<RegisteredParksListMessage> replyTo) -> new ParkingLotManagerActor.GetRegistered(replyTo),
+        CompletionStage<NearbyParkingLotsResponseMessage> response = AskPattern.ask(
+                routingActor,
+                (ActorRef<NearbyParkingLotsResponseMessage> replyTo) -> new RoutingActor.GetNearbyParkingLots(userLat, userLng, limit, onlyAvailable, replyTo),
                 ASK_TIMEOUT,
                 scheduler
         );
 
-        CompletionStage<String> jsonFut = regFut.thenCompose(reg -> {
-            java.util.List<java.util.concurrent.CompletableFuture<NearbyLot>> futures = new java.util.ArrayList<>();
-
-            for (String parkId : reg.getParks().keySet()) {
-                CompletionStage<ParkingLotStatusMessage> stStage = AskPattern.ask(
-                        parkingLotManager,
-                        (ActorRef<ParkingLotStatusMessage> replyTo) -> new ParkingLotManagerActor.GetStatus(parkId, replyTo),
-                        ASK_TIMEOUT,
-                        scheduler
-                );
-
-                java.util.concurrent.CompletableFuture<NearbyLot> lotF = stStage.thenApply(status -> {
-                    double distM = haversineMeters(userLat, userLng, status.getLat(), status.getLng());
-                    return new NearbyLot(
-                            status.getParkId(),
-                            status.getLat(),
-                            status.getLng(),
-                            status.getMaxCapacity(),
-                            status.getCurrentOccupancy(),
-                            status.getAvailableSpaces(),
-                            distM
-                    );
-                }).toCompletableFuture();
-
-                futures.add(lotF);
-            }
-
-            return java.util.concurrent.CompletableFuture
-                    .allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0]))
-                    .thenApply(v -> {
-                        java.util.stream.Stream<NearbyLot> stream = futures.stream()
-                                .map(java.util.concurrent.CompletableFuture::join);
-
-                        if (onlyAvailable) {
-                            stream = stream.filter(l -> l.availableSpaces > 0);
-                        }
-
-                        java.util.List<NearbyLot> out = stream
-                                .sorted(java.util.Comparator.comparingDouble(l -> l.distanceMeters))
-                                .limit(limit)
-                                .collect(java.util.stream.Collectors.toList());
-
-                        return gson.toJson(new NearbyResponse(out));
-                    });
+        return onSuccess(response, nearbyResponse -> {
+            String json = gson.toJson(new NearbyResponse(nearbyResponse.getResults()));
+            return complete(HttpResponse.create()
+                    .withStatus(StatusCodes.OK)
+                    .withEntity(ContentTypes.APPLICATION_JSON, json));
         });
-
-        return onSuccess(jsonFut, json ->
-                complete(HttpResponse.create()
-                        .withStatus(StatusCodes.OK)
-                        .withEntity(ContentTypes.APPLICATION_JSON, json))
-        );
     }
 
 
@@ -528,52 +487,10 @@ public class ParkingHttpServer {
 
 
     // Nearby parking-lot DTOs
-    public static class NearbyLot {
-        public String parkId;
-        public int maxCapacity;
-        public int currentOccupancy;
-        public int availableSpaces;
-        public double lat;
-        public double lng;
-        public double distanceMeters;
-
-        public NearbyLot(String parkId,
-                         double lat,
-                         double lng,
-                         int maxCapacity,
-                         int currentOccupancy,
-                         int availableSpaces,
-                         double distanceMeters) {
-            this.parkId = parkId;
-            this.lat = lat;
-            this.lng = lng;
-            this.maxCapacity = maxCapacity;
-            this.currentOccupancy = currentOccupancy;
-            this.availableSpaces = availableSpaces;
-            this.distanceMeters = distanceMeters;
-        }
-    }
-
     public static class NearbyResponse {
-        public java.util.List<NearbyLot> results;
-        public NearbyResponse(java.util.List<NearbyLot> results) { this.results = results; }
+        public java.util.List<NearbyParkingLotsResponseMessage.NearbyLot> results;
+        public NearbyResponse(java.util.List<NearbyParkingLotsResponseMessage.NearbyLot> results) { this.results = results; }
     }
-
-    // Haversine (great-circle) distance in meters
-    private static double haversineMeters(double lat1, double lon1, double lat2, double lon2) {
-        final double R = 6371000.0; // meters
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLon = Math.toRadians(lon2 - lon1);
-
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }
-
-
     // DTOs for HTTP requests/responses
     public static class RegisterParkRequest { public String parkId; public int maxCapacity; public double lat; public double lng;}
     public static class RegisterParkResponse { public String parkId; public int maxCapacity; public String status; public RegisterParkResponse(String parkId, int maxCapacity, String status) { this.parkId = parkId; this.maxCapacity = maxCapacity; this.status = status; } }

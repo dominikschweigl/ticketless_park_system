@@ -13,6 +13,7 @@ import java.util.function.BiConsumer;
 
 import com.ticketless.parking.actors.ParkingLotManagerActor;
 import com.ticketless.parking.actors.PaymentActor;
+import com.ticketless.parking.actors.RoutingActor;
 import com.ticketless.parking.http.ParkingHttpServer;
 import com.ticketless.parking.actors.BookingActor;
 import io.nats.client.Connection;
@@ -29,6 +30,7 @@ public class ParkingSystemApp {
     private final ActorRef<ParkingLotManagerActor.Command> parkingLotManager;
     private final ActorRef<PaymentActor.Command> paymentActor;
     private final ActorRef<BookingActor.Command> bookingActor;
+    private final ActorRef<RoutingActor.Command> routingActor;
     private final Connection parkinglot_mq;
     private final ParkingHttpServer httpServer;
 
@@ -49,9 +51,10 @@ public class ParkingSystemApp {
         }
         BiConsumer<String, String> publisher = (subject, json) -> this.parkinglot_mq.publish(subject, json.getBytes(StandardCharsets.UTF_8));
         this.bookingActor = actorSystem.systemActorOf(BookingActor.create(publisher), "booking-actor", Props.empty());
+        this.routingActor = actorSystem.systemActorOf(RoutingActor.create(parkingLotManager), "routing-actor", Props.empty());
 
         // Initialize HTTP server
-        this.httpServer = new ParkingHttpServer(actorSystem, parkingLotManager, paymentActor, bookingActor);
+        this.httpServer = new ParkingHttpServer(actorSystem, parkingLotManager, paymentActor, bookingActor, routingActor);
 
         // Get HTTP server configuration from environment or use defaults
         String httpHost = System.getenv().getOrDefault("HTTP_HOST", "0.0.0.0");
