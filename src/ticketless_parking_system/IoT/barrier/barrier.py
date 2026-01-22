@@ -55,13 +55,13 @@ class BarrierSensorController:
         pass
 
     async def detect_vehicle(self) -> bool:
-        # TODO: sensor simulation / real sensor logic here
+        # Mocked sensor read; in production replace with real light-sensor GPIO handling
         await asyncio.sleep(0.5)
         detected = True  # GPIO function call       
         return detected                 
 
     async def vehicle_passed(self) -> bool:
-        # TODO: sensor simulation / real sensor logic here
+        # Mocked downstream sensor; in production swap for actual barrier-exit detection
         await asyncio.sleep(0.5)
         passed = True  # GPIO function call
         return passed           

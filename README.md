@@ -72,7 +72,8 @@ The system consists of four main layers:
 
 ### Cloud stack (Terraform, AWS)
 
-- Prereqs: AWS credentials, `terraform`, built artifacts (`cloud/target/parking-system.jar`, `webapp/dist`).
+- Prereqs: AWS credentials, `terraform`, built artifacts (`src/../cloud/target/parking-system.jar`, `src/../webapp/dist`) according to respective webapp
+  and akka cloud READMEs.
 - Deploy:
   ```bash
   terraform init
@@ -210,7 +211,7 @@ A FastAPI-based web dashboard that provides real-time monitoring of the parking 
 #### WebSocket Server
 
 - Serves on port 8000
-- listens on any camera/barrier_id.* topic
+- listens on any camera/barrier_id.\* topic
 - creates a card for every actively communicating camera+barrier composition
 - displays camera input and a figurative picture for the barrier state
 
