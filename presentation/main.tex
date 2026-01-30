@@ -160,18 +160,15 @@
 % LEFT: Content
 \begin{column}{0.48\textwidth}
 \begin{itemize}
-    \item<+-> \kw{Edge Stack: Python + SQLite + FastAPI}
+    \item<+-> \kw{System and Edge Workflow}
     \begin{itemize}
-        \item \textbf{Python} for ML integration 
-        \item \textbf{SQLite} as lightweight local store
-        \item \textbf{FastAPI} to monitor barrier state and camera input
-        \item \textbf{Dockerized} components for easy deployment on edge devices with docker-compose
-    \end{itemize}
-
-    \item<+-> \kw{Cloud Stack: Akka Typed + Akka HTTP}
-    \begin{itemize}
-        \item Actor-based orchestration for \textit{parking lot} functionality
-        \item \textbf{REST API} for edge and web clients
+        \item Camera sees license plate at entry 
+        \item Frame sent to edge via local NATS
+        \item Edge performs plate recognition
+        \item Parking session stored locally on edge, gate open
+        \item Data sent to Cloud with Akka HTTP
+        \item At exit, edge checks payment status with cloud
+        \item If paid → gate opens, else payment required
     \end{itemize}
 \end{itemize}
 \end{column}
@@ -192,19 +189,22 @@
 % LEFT: Content
 \begin{column}{0.48\textwidth}
     \begin{itemize}
-        \item<+-> \kw{Web Application: React + Tailwind CSS}
+      \item<+-> \kw{Cloud Backend \& Communication}
             \begin{itemize}
-                \item \textbf{React} provides a dynamic UI for availability, reservations, routing and payments
-                \item \textbf{Tailwind} CSS for responsive layout
-                \item Browser-based \textbf{geolocation} for nearby parking facilities
+                \item \textbf{Akka Typed} actors manage global state (payment, routing, booking, lot)
+                \item \textbf{Akka HTTP} exposes REST endpoints (web + edge)
+                \item \textbf{NATS} for event-style messaging (e.g., booking propagation)
             \end{itemize}
-
-        \item<+-> \kw{Hosting \& Deployment: EC2 + Nginx + Terraform}
-        \begin{itemize}
-            \item Separate EC2 instances for Akka backend, web frontend and cloud NATS
-            \item \textbf{Nginx} webserver for web app
-            \item \textbf{Terraform} for infrastructure as code; build artifacts uploaded via file provisioner
-        \end{itemize}
+        \item<+-> \kw{Web Application}
+            \begin{itemize}
+                \item \textbf{React} provides a dynamic UI for:
+                  \begin{itemize}
+                    \item payments
+                    \item reservations
+                    \item routing
+                  \end{itemize}
+                \item \textbf{Tailwind} CSS for responsive layout
+            \end{itemize}
     \end{itemize}
 \end{column}
 
