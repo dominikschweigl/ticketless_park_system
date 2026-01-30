@@ -72,6 +72,26 @@
 \end{frame}
 
 % ----------------------------
+\begin{frame}{Motivation}
+\begin{itemize}
+    \item\kw{Improved Parking Experience}
+    \begin{itemize}
+        \item Pay online without physical tickets that need management and can be lost
+        \item License plate-based identification
+        \item No need to interact with payment terminals
+    \end{itemize}
+
+    \item\kw{Smart Booking System}
+    \begin{itemize}
+        \item Reserve parking spots in advance
+        \item Find closest parking facilities with available spaces
+        \item Extension: Book spots periodically (daily, weekly, monthly)
+    \end{itemize}
+        
+\end{itemize}
+\end{frame}
+
+% ----------------------------
 \begin{frame}{System Architecture}
     \centering
     \includegraphics[width=0.9\linewidth, height=0.8\textheight, keepaspectratio]{architecture_diagram.png} 
@@ -79,63 +99,123 @@
 
 % ----------------------------
 \begin{frame}{Resources (1/3)}
+\begin{columns}[T,totalwidth=\textwidth]
+% LEFT: Content
+\begin{column}{0.5\textwidth}
 \begin{itemize}
-    \item<+-> \kw{Dataset: Car License Plate Detection (Kaggle)}
+    \item\kw{Dataset: Car License Plate Detection (Kaggle)}
     \begin{itemize}
         \item 400+ annotated images (front/rear views)
         \item Suitable for prototyping and evaluation
     \end{itemize}
 
-    \item<+-> \kw{Computer Vision: YOLOv11 + OCR}
+    \item\kw{Computer Vision: YOLOv11+OCR}
     \begin{itemize}
         \item Real-time license plate detection on the edge
         \item \textbf{OCR} extracts the license plate string
     \end{itemize}
 
-    \item<+-> \kw{Messaging: NATS}
+    \item\kw{Messaging: NATS}
     \begin{itemize}
         \item Pub/Sub for camera frames and control signals (barrier)
         \item Asynchronous cloud-to-edge communication
-    \end{itemize}
+    \end{itemize}    
 \end{itemize}
+\end{column}
+\begin{column}{0.46\textwidth}
+\centering
+\includegraphics[width=0.7\linewidth, keepaspectratio]{car_license_plate.png} 
+\end{column}
+\end{columns}
 \end{frame}
+
+
+% ----------------------------
+\begin{frame}{Resources (1/3)}
+\begin{columns}[T,totalwidth=\textwidth]
+% LEFT: Content
+\begin{column}{0.5\textwidth}
+\begin{itemize}
+    \item\kw{Camera Implementation}
+    \begin{itemize}
+        \item Python process simulating a camera at the entry/exit gate
+        \item Sends image stream to edge server over NATS
+        \item Car display duration 1 second
+        \item Entry switches between car and empty gate scenes every 4 seconds
+        \item Exit shows entered car exiting randomly
+    \end{itemize}   
+\end{itemize}
+\end{column}
+\begin{column}{0.46\textwidth}
+\centering
+\includegraphics[width=1.1\linewidth, keepaspectratio]{camera_implementation.png} 
+\end{column}
+\end{columns}
+\end{frame}
+
 
 % ----------------------------
 \begin{frame}{Resources (2/3)}
+\begin{columns}[T,totalwidth=\textwidth]
+
+% LEFT: Content
+\begin{column}{0.48\textwidth}
 \begin{itemize}
-    \item<+-> \kw{Edge Stack: Python + SQLite + FastAPI + Akka}
+    \item<+-> \kw{Edge Stack: Python + SQLite + FastAPI}
     \begin{itemize}
-        \item \textbf{Python} for ML integration
+        \item \textbf{Python} for ML integration 
         \item \textbf{SQLite} as lightweight local store
-        \item \textbf{FastAPI} to monitor barrier state and camera imput
+        \item \textbf{FastAPI} to monitor barrier state and camera input
+        \item \textbf{Dockerized} components for easy deployment on edge devices with docker-compose
     \end{itemize}
 
-    \item<+-> \kw{Cloud Stack: Akka Typed + Akka HTTP + DynamoDB}
+    \item<+-> \kw{Cloud Stack: Akka Typed + Akka HTTP}
     \begin{itemize}
         \item Actor-based orchestration for \textit{parking lot} functionality
         \item \textbf{REST API} for edge and web clients
-        \item Persistent actor state via \textbf{DynamoDB}
     \end{itemize}
 \end{itemize}
+\end{column}
+
+% RIGHT: Architecture Diagram
+\begin{column}{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth, keepaspectratio]{architecture_diagram.png} 
+\end{column}
+
+\end{columns}
 \end{frame}
 
 % ----------------------------
 \begin{frame}{Resources (3/3)}
+\begin{columns}[T,totalwidth=\textwidth]
+
+% LEFT: Content
+\begin{column}{0.48\textwidth}
     \begin{itemize}
         \item<+-> \kw{Web Application: React + Tailwind CSS}
             \begin{itemize}
                 \item \textbf{React} provides a dynamic UI for availability, reservations, routing and payments
                 \item \textbf{Tailwind} CSS for responsive layout
-                \item Browser-based \textbf{geolocation} supports finding nearby parking facilities
+                \item Browser-based \textbf{geolocation} for nearby parking facilities
             \end{itemize}
 
-        \item<+-> \kw{Hosting \& Deployment: EC2 + Nginx + Terraform (+ S3)}
+        \item<+-> \kw{Hosting \& Deployment: EC2 + Nginx + Terraform}
         \begin{itemize}
-            \item EC2 hosts the Akka backend and the web frontend on separate instances
-            \item \textbf{Nginx} serves as webserver for the WebApp
-            \item \textbf{Terraform} defines infrastructure as code; build artifacts are distributed via S3
+            \item Separate EC2 instances for Akka backend, web frontend and cloud NATS
+            \item \textbf{Nginx} webserver for web app
+            \item \textbf{Terraform} for infrastructure as code; build artifacts uploaded via file provisioner
         \end{itemize}
     \end{itemize}
+\end{column}
+
+% RIGHT: Architecture Diagram
+\begin{column}{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth, keepaspectratio]{architecture_diagram.png} 
+\end{column}
+
+\end{columns}
 \end{frame}
 % ----------------------------
 
@@ -145,10 +225,51 @@
 \href{run:show3.mp4}{\texttt{Video}}
 \end{frame}
 
+
 % ----------------------------
 
 
-\begin{frame}{Evaluation Result (1/3)}
+\begin{frame}{Evaluation Setup}
+\begin{columns}[T,totalwidth=\textwidth]
+
+% LEFT: Summary
+\begin{column}{0.6\textwidth}
+\vspace{0.5em}
+
+\begin{itemize}
+  \item<+-> \kw{Cloud Setup}
+      \begin{itemize}
+          \item AWS EC2 t3.micro instances (2 vCPU, 1 GiB RAM)
+          \item Separate instances for:
+            \begin{itemize}
+              \item NATS server
+              \item Akka backend
+              \item Nginx webserver
+            \end{itemize}
+      \end{itemize}
+
+  \item<+-> \kw{Edge Client simulation for load testing}
+      \begin{itemize}
+        \item wrk2 HTTP benchmarking tool simulating client requests to backend
+        \item Client simulation host with Intel i5-8600K CPU, 16 GiB RAM   
+      \end{itemize}
+
+  \item<+-> \kw{Edge setup for latency measurements}
+      \begin{itemize}
+        \item Host with Intel i5-8250U CPU, 8 GiB RAM, no GPU   
+      \end{itemize}
+\end{itemize}
+\end{column}
+
+
+
+\end{columns}
+\end{frame}
+
+% ----------------------------
+
+
+\begin{frame}{Evaluation Result (1/3) Latency}
 \begin{columns}[T,totalwidth=\textwidth]
 
 % LEFT: Summary
@@ -199,9 +320,29 @@ coordinates {
 
 
 % ----------------------------
-\begin{frame}{Evaluation Result (1/3)}
-\centering
 
+\begin{frame}{Evaluation Result (1/3) Throughput}
+\begin{columns}[T,totalwidth=\textwidth]
+
+% LEFT: Summary
+\begin{column}{0.35\textwidth}
+\vspace{0.5em}
+\kw{Cloud Backend (Load Test)}
+
+\begin{itemize}
+  \item Stable up to \kw{$\approx$300 req/s}
+  \item Saturation at \kw{$\approx$400 req/s}
+  \item Overload causes:
+    \begin{itemize}
+      \item high tail latency
+      \item request timeouts
+    \end{itemize}
+\end{itemize}
+\end{column}
+
+% RIGHT: Plot
+\begin{column}{0.65\textwidth}
+\centering
 \begin{tikzpicture}
 \begin{axis}[
     width=0.9\linewidth,
@@ -223,16 +364,34 @@ coordinates {
 };
 \end{axis}
 \end{tikzpicture}
+\end{column}
 
-\vspace{0.5em}
-
+\end{columns}
 \end{frame}
-% ----------------------------
-\begin{frame}{Evaluation Result (1/3)}
-\kw{Success Rate}
-\\
-\centering
 
+% ----------------------------
+\begin{frame}{Evaluation Result (1/3) Success Rate}
+\begin{columns}[T,totalwidth=\textwidth]
+
+% LEFT: Summary
+\begin{column}{0.35\textwidth}
+\vspace{0.5em}
+\kw{Cloud Backend (Load Test)}
+
+\begin{itemize}
+  \item Stable up to \kw{$\approx$300 req/s}
+  \item Saturation at \kw{$\approx$400 req/s}
+  \item Overload causes:
+    \begin{itemize}
+      \item high tail latency
+      \item request timeouts
+    \end{itemize}
+\end{itemize}
+\end{column}
+
+% RIGHT: Plot
+\begin{column}{0.65\textwidth}
+\centering
 \begin{tikzpicture}
 \begin{axis}[
     width=0.9\linewidth,
@@ -254,16 +413,28 @@ coordinates {
 };
 \end{axis}
 \end{tikzpicture}
+\end{column}
 
-\vspace{0.5em}
-
+\end{columns}
 \end{frame}
 
 % ----------------------------
+\begin{frame}{Evaluation Result (2/3) Single Client Nginx Throughput}
+\begin{columns}[T,totalwidth=\textwidth]
 
-\begin{frame}{Evaluation Result (2/3)}
-\kw{Web Interface Load Test} 
-\\
+% LEFT: Summary
+\begin{column}{0.35\textwidth}
+\vspace{0.5em}
+\kw{Single Client Nginx Webserver (Load Test)}
+
+\begin{itemize}
+  \item For a single client request rates drop after \kw{30 req/s}
+  \item Limited inflight requests by wrk2 tool per client
+\end{itemize}
+\end{column}
+
+% RIGHT: Plot
+\begin{column}{0.65\textwidth}
 \centering
 \begin{tikzpicture}
 \begin{axis}[
@@ -295,13 +466,90 @@ coordinates {
 \end{axis}
 \end{tikzpicture}
 
-\vspace{0.2em}
+\end{column}
 
+\end{columns}
 \end{frame}
+
+\begin{frame}{Evaluation Result (2/3) Multi-Client Nginx Server Throughput}
+\begin{columns}[T,totalwidth=\textwidth]
+
+% LEFT: Summary
+\begin{column}{0.35\textwidth}
+\vspace{0.5em}
+\kw{Multi-Client Nginx (Load Test)}
+
+\begin{itemize}
+  \item Number of Clients scales with target request rate (~5 req/s per client)
+  \item Throughput grows linearly up to \kw{4000 req/s}
+  \item After \kw{4000 req/s} throughput drops significantly
+\end{itemize}
+\end{column}
+
+% RIGHT: Plot
+\begin{column}{0.65\textwidth}
+\centering
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    width=\linewidth,
+    height=6.5cm,
+    xlabel={Total target request rate [req/s]},
+    ylabel={Throughput [req/s]},
+    xmin=400, xmax=5200,
+    ymin=0, ymax=2600,
+    grid=both,
+    legend style={at={(0.03,0.97)},anchor=north west},
+    tick label style={font=\small},
+    label style={font=\small},
+]
+
+\addplot+[black, mark=*, mark options={fill=black}, thick]
+coordinates {
+  (500,422)
+  (1000,675)
+  (2000,1174)
+  (3000,1902)
+  (4000,2416)
+  (4200,1057)
+  (4500,888)
+  (4800,613)
+  (5000,53)
+};
+\addlegendentry{Throughput}
+
+\end{axis}
+\end{tikzpicture}
+\end{figure}
+
+\end{column}
+
+\end{columns}
+\end{frame}
+
+
 % ----------------------------
-\begin{frame}{Evaluation Result (2/3)}
-\kw{Nginx Server Response Latency}
-\\
+
+\begin{frame}{Evaluation Result (2/3) Multi-Client Nginx Server Response Latency}
+\begin{columns}[T,totalwidth=\textwidth]
+
+% LEFT: Summary
+\begin{column}{0.35\textwidth}
+\vspace{0.5em}
+\kw{Multi-Client Nginx (Load Test)}
+
+\begin{itemize}
+  \item Number of Clients scales with target request rate (~5 req/s per client)
+  \item Latency stable up to \kw{4000 req/s}
+  \item After \kw{4000 req/s} latency increases significantly in accordance
+   with throughput drop
+\end{itemize}
+\end{column}
+
+% RIGHT: Plot
+\begin{column}{0.65\textwidth}
 \centering
 \begin{figure}[H]
 \centering
@@ -380,51 +628,38 @@ coordinates {
 \end{figure}
 
 
+\end{column}
 
+\end{columns}
 \end{frame}
-% ----------------------------
-\begin{frame}{Evaluation Result (2/3)}
-\kw{Nginx Throughput}
-\\
-\centering
-\begin{figure}[H]
-\centering
-\begin{tikzpicture}
-\begin{axis}[
-    width=\linewidth,
-    height=6.5cm,
-    xlabel={Total target request rate [req/s]},
-    ylabel={Throughput [req/s]},
-    xmin=400, xmax=5200,
-    ymin=0, ymax=2600,
-    grid=both,
-    legend style={at={(0.03,0.97)},anchor=north west},
-    tick label style={font=\small},
-    label style={font=\small},
-]
 
-\addplot+[black, mark=*, mark options={fill=black}, thick]
-coordinates {
-  (500,422)
-  (1000,675)
-  (2000,1174)
-  (3000,1902)
-  (4000,2416)
-  (4200,1057)
-  (4500,888)
-  (4800,613)
-  (5000,53)
-};
-\addlegendentry{Throughput}
 
-\end{axis}
-\end{tikzpicture}
-\end{figure}
-\end{frame}
+
 % ----------------------------
-\begin{frame}{Evaluation Result (3/3)}
-\kw{Latency Distribution (Entry)}
-\\
+\begin{frame}{Evaluation Result (3/3) Car Park Entry Gate Latency}
+\begin{columns}[T,totalwidth=\textwidth]
+
+% LEFT: Summary
+\begin{column}{0.35\textwidth}
+\vspace{0.5em}
+\kw{Entry Gate Latency Distribution}
+
+\begin{itemize}
+  \item End-to-end latency from image capture to barrier opening
+  \item Includes:
+    \begin{itemize}
+      \item Event transmission to cloud
+      \item License plate recognition
+      \item Database lookup
+      \item Barrier open command transmission
+    \end{itemize}
+  \item Total entry samples: 414
+\end{itemize}
+\end{column}
+
+% RIGHT: Plot
+\begin{column}{0.65\textwidth}
+\centering
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}
@@ -468,13 +703,36 @@ coordinates {
 \end{axis}
 \end{tikzpicture}
 \end{figure}
-\vspace{0.3em}
-\scriptsize Total exit samples: 414
+\end{column}
+
+\end{columns}
 \end{frame}
 % ----------------------------
-\begin{frame}{Evaluation Result (3/3)}
-\kw{Latency Distribution (Exit)}
+
+
+\begin{frame}{Evaluation Result (3/3) Car Park Exit Gate Latency}
+\begin{columns}[T,totalwidth=\textwidth]
+
+% LEFT: Summary
+\begin{column}{0.35\textwidth}
+\vspace{0.5em}
+\kw{Exit Gate Latency Distribution}
+
+\begin{itemize}
+  \item End-to-end latency from image capture to barrier opening
+  \item Two scenarios:
+    \begin{itemize}
+      \item Car with payment (high latency)
+      \item Car without payment (low latency)
+    \end{itemize}
+  \item Total exit samples: 172
+\end{itemize}
+\end{column}
+
+% RIGHT: Plot
+\begin{column}{0.65\textwidth}
 \centering
+
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}
@@ -536,10 +794,10 @@ coordinates {
 
 \end{figure}
 
-\vspace{0.3em}
-\scriptsize Total exit samples: 172
-\end{frame}
+\end{column}
 
+\end{columns}
+\end{frame}
 
 % ----------------------------
 
