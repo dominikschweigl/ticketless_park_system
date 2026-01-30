@@ -113,13 +113,7 @@
     \begin{itemize}
         \item Real-time license plate detection on the edge
         \item \textbf{OCR} extracts the license plate string
-    \end{itemize}
-
-    \item\kw{Messaging: NATS}
-    \begin{itemize}
-        \item Pub/Sub for camera frames and control signals (barrier)
-        \item Asynchronous cloud-to-edge communication
-    \end{itemize}    
+    \end{itemize}  
 \end{itemize}
 \end{column}
 \begin{column}{0.46\textwidth}
@@ -139,11 +133,16 @@
     \item\kw{Camera Implementation}
     \begin{itemize}
         \item Python process simulating a camera at the entry/exit gate
-        \item Sends image stream to edge server over NATS
+        \item Sends image stream to edge server
         \item Car display duration 1 second
         \item Entry switches between car and empty gate scenes every 4 seconds
         \item Exit shows entered car exiting randomly
     \end{itemize}   
+
+    \item\kw{Messaging: NATS}
+    \begin{itemize}
+        \item Pub/Sub for camera frames and control signals (barrier)
+    \end{itemize}  
 \end{itemize}
 \end{column}
 \begin{column}{0.46\textwidth}
@@ -278,12 +277,14 @@
 \kw{Cloud Backend (Load Test)}
 
 \begin{itemize}
+  \item Custom Python client simulating edge device requests
   \item Stable up to \kw{$\approx$300 req/s}
   \item Saturation at \kw{$\approx$400 req/s}
   \item Overload causes:
     \begin{itemize}
       \item high tail latency
       \item request timeouts
+      \item decreased success rate
     \end{itemize}
 \end{itemize}
 \end{column}
@@ -330,12 +331,14 @@ coordinates {
 \kw{Cloud Backend (Load Test)}
 
 \begin{itemize}
+    \item Custom Python client simulating edge device requests
   \item Stable up to \kw{$\approx$300 req/s}
   \item Saturation at \kw{$\approx$400 req/s}
   \item Overload causes:
     \begin{itemize}
       \item high tail latency
       \item request timeouts
+      \item decreased success rate
     \end{itemize}
 \end{itemize}
 \end{column}
@@ -379,12 +382,14 @@ coordinates {
 \kw{Cloud Backend (Load Test)}
 
 \begin{itemize}
+    \item Custom Python client simulating edge device requests
   \item Stable up to \kw{$\approx$300 req/s}
   \item Saturation at \kw{$\approx$400 req/s}
   \item Overload causes:
     \begin{itemize}
       \item high tail latency
       \item request timeouts
+      \item decreased success rate
     \end{itemize}
 \end{itemize}
 \end{column}
